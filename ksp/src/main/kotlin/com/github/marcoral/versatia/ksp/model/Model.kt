@@ -10,6 +10,9 @@ import com.squareup.kotlinpoet.ClassName
 /** One `@VersatiaEnhancement` resolved for a concrete occurrence: which processor, at which phase. */
 internal data class Enhancement(val processorClass: String, val phase: EventType)
 
+/** An enhancement annotation as written at one place together with the enhancements it resolves to. */
+internal data class EnhancedAnnotation(val annotation: AnnotationRef, val enhancements: List<Enhancement>)
+
 /** An annotation as written at one place, with its arguments as descriptor values. */
 internal data class AnnotationRef(val type: ClassName, val arguments: Map<String, Any?> = emptyMap())
 

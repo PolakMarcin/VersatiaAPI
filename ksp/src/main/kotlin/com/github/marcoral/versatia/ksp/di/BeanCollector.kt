@@ -9,6 +9,7 @@ import com.github.marcoral.versatia.ksp.EnhancementResolver
 import com.github.marcoral.versatia.ksp.assignableTypes
 import com.github.marcoral.versatia.ksp.classesIn
 import com.github.marcoral.versatia.ksp.isReachable
+import com.github.marcoral.versatia.ksp.model.EnhancedAnnotation
 import com.github.marcoral.versatia.ksp.model.Enhancement
 import com.google.devtools.ksp.getConstructors
 import com.google.devtools.ksp.processing.KSPLogger
@@ -22,7 +23,7 @@ import com.squareup.kotlinpoet.ksp.toClassName
 
 /**
  * Finds every class annotated with a scope that inherits `@Bean` and describes it. The plugin's
- * main class is described separately: it is a local bean without being annotated.
+ * main class is described separately, with the enhancements the generic `PluginCollector` found.
  */
 internal class BeanCollector(
     private val logger: KSPLogger,
@@ -40,8 +41,8 @@ internal class BeanCollector(
         .flatMap { file -> file.declarations.flatMap(::classesIn) }
         .mapNotNull(::describe)
 
-    /** The main class as a bean: always named `BeanNames.PLUGIN`, so `@Qualifier` is rejected; `@Primary` applies. */
-    fun describePlugin(): PluginDeclaration {
+    /** The main class: its bean is always named `BeanNames.PLUGIN`, so `@Qualifier` is rejected; `@Primary` applies. */
+    fun describePlugin(enhancements: List<EnhancedAnnotation>): PluginDeclaration {
         val recorded = attributes.of(mainClass, mainClass)
         if (recorded.qualifier() != null)
             fail(mainClass, "${mainClass.simpleName.asString()} is the plugin's main class and its bean is always named \"${BeanNames.PLUGIN}\"; remove @Qualifier")
@@ -50,6 +51,7 @@ internal class BeanCollector(
             primary = recorded.isPrimary(),
             annotations = recorded,
             assignableTypes = mainClass.assignableTypes(),
+            enhancements = enhancements,
             node = mainClass,
         )
     }

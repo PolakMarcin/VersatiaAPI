@@ -38,7 +38,7 @@ object BeanProcessors {
     const val EXPOSE_SINGLETON = "com.github.marcoral.versatia.di.ExposeSingletonEnhancementProcessor"
     const val EXPOSE_PROTOTYPE = "com.github.marcoral.versatia.di.ExposePrototypeEnhancementProcessor"
 
-    /** Registers the plugin's main class as a bean; the descriptor sends the main class here without any annotation. */
+    /** Registers the plugin's main class as a bean; `@PluginBean` on `VersatiaPlugin` sends the main class here. */
     const val PLUGIN = "com.github.marcoral.versatia.di.PluginBeanEnhancementProcessor"
 
     /** The scopes declare beans, and beans can only be declared when the plugin starts. */

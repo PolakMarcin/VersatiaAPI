@@ -65,7 +65,7 @@ element carries
 |------------------|---------------------------------------------------------------------------|
 | `processorClass` | the processor that interprets it                                          |
 | `phase`          | the `EventType` at which it runs; see [Phases](#phases)                   |
-| `annotation`     | the enhancement annotation that produced it, with its arguments; `null` for the main class, which no annotation produces |
+| `annotation`     | the enhancement annotation that produced it, with its arguments; for the main class it may have been written on a supertype |
 | `target`         | what was annotated                                                        |
 
 The descriptor records facts about the annotated code, never what a feature makes of them. A
@@ -192,10 +192,11 @@ the candidate beans, so a parameter may be typed by an interface the bean implem
 
 ### The plugin itself
 
-The plugin's main class is a local bean without any annotation. Bukkit creates the instance; the
-runtime registers it in the plugin's bean session before anything else is created, so beans and
-auto-invoked functions can ask for it by its own type or by any supertype (`VersatiaPlugin`,
-`JavaPlugin`, `Plugin`):
+The plugin's main class is a local bean through `@PluginBean`, which `VersatiaPlugin` carries
+(see [Enhancements of the main class](#enhancements-of-the-main-class)). Bukkit creates the
+instance; the runtime registers it in the plugin's bean session before anything else is created,
+so beans and auto-invoked functions can ask for it by its own type or by any supertype
+(`VersatiaPlugin`, `JavaPlugin`, `Plugin`):
 
 ```kotlin
 @LocalBean
@@ -211,7 +212,9 @@ Its bean name is always `plugin` (`BeanNames.PLUGIN`), whatever the class is cal
 a scope annotation (`MyPlugin is the plugin's main class and a local bean already; remove
 @LocalBean`), since the runtime must never construct a second plugin instance. The descriptor
 records the main class as a `PluginTarget` sent to `PluginBeanEnhancementProcessor`
-(`BeanProcessors.PLUGIN`), which declares it in the same session as the scopes do.
+(`BeanProcessors.PLUGIN`), which declares it in the same session as the scopes do. A main class
+that extends `JavaPlugin` directly is a bean only if it carries `@PluginBean` itself; without it the
+name `plugin` is free.
 
 ### Names, `@Qualifier` and `@Primary`
 
@@ -287,12 +290,18 @@ object VersatiaDescriptor : VersatiaPluginDescriptor {
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.PluginBeanEnhancementProcessor",
         phase = EventType.PLUGIN_START_ONLY,
-        annotation = null,
+        annotation = AnnotationOccurrence("com.github.marcoral.versatia.di.PluginBean"),
         target = PluginTarget(
           className = "com.example.alpha.AlphaPlugin",
           assignableTypes = listOf("com.example.alpha.AlphaPlugin", "com.github.marcoral.versatia.VersatiaPlugin", "org.bukkit.plugin.java.JavaPlugin", "org.bukkit.plugin.Plugin", /* ... */),
           annotations = emptyList(),
         ),
+      ),
+      EnhancedElement(
+        processorClass = "com.github.marcoral.versatia.resources.ExtractResourcesEnhancementProcessor",
+        phase = EventType.PLUGIN_START_ONLY,
+        annotation = AnnotationOccurrence("com.github.marcoral.versatia.resources.ExtractResources"),
+        target = PluginTarget(/* the same */),
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.LocalBeanEnhancementProcessor",
@@ -384,6 +393,28 @@ fetches it through the plugin's `BeanResolver`. Functions run after every other 
 order (class name, then function name), and a plugin's beans stay available for its whole
 lifetime, so reload- and stop-phase functions can use them too.
 
+## Enhancements of the main class
+
+Class enhancements written on the main class, or on any of its supertypes, produce one
+`PluginTarget` element each. `VersatiaPlugin` carries `@PluginBean` and `@ExtractResources`, which
+is how every Versatia plugin gets its bean container and its resources without declaring anything;
+an abstract base plugin in a library can add enhancements for the plugins extending it the same
+way. The `PluginTarget` is the same for all of them: class name, assignable types and attributes,
+nothing to construct. A processor that expects the main class accepts only that target and only
+once per plugin.
+
+## Plugin resources
+
+`@ExtractResources` (`resources`), declared on `VersatiaPlugin`, copies every file under the
+`resources` directory of the plugin's JAR (`src/main/resources/resources/` in the build) into the
+plugin's data folder at `PLUGIN_START_ONLY`, keeping the layout below that directory. A file that
+already exists is never replaced, so edits made on the server survive an update; deleting a file
+and restarting the plugin restores it. The processor runs immediately, before the beans are
+created, so a bean may read the files in its constructor. The directory name is fixed
+(`ExtractResources.DIRECTORY`); other files in `src/main/resources`, such as `plugin.yml`, stay in
+the JAR. The processor is `ExtractResourcesEnhancementProcessor` (`ResourceProcessors.EXTRACT`) in
+VersatiaCore.
+
 ## Setting up a plugin build
 
 ```kotlin
@@ -430,15 +461,17 @@ The module mirrors the feature packages of the API: `ksp` holds what every featu
 1. `VersatiaSymbolProcessor` runs once per compilation. `MainClassLocator` finds the plugin's main
    class (or reads it from `plugin.yml` when the option is set). `EnhancementResolver` resolves
    the enhancements an annotation inherits; `Attributes` records attribute occurrences and turns
-   annotation arguments into descriptor values.
+   annotation arguments into descriptor values; `PluginCollector` gathers the enhancement
+   annotations on the main class and its supertypes.
 2. `di.BeanCollector` walks every class declaration in the sources (compile-time scanning is fine,
    runtime scanning is not) and, for each annotation on a class, checks whether it inherits
    `@Bean`. Hits become `BeanDeclaration`s: type, name, scope occurrence, enhancements, attributes,
-   parameters, assignable types, reachability. The main class becomes a `PluginDeclaration`.
+   parameters, assignable types, reachability. The main class becomes a `PluginDeclaration`
+   carrying the enhancements `PluginCollector` found.
 3. `lifecycle.FunctionCollector` collects functions annotated with an enhancement and checks their
    owner and parameters; the injection rules it applies come from `ksp.di`.
 4. `di.BeanGraphValidator` is pure Kotlin: names, ambiguity and cycle detection over the
-   declarations, the plugin included as a dependency-free local bean.
+   declarations, the plugin included as a dependency-free local bean when it has `@PluginBean`.
 5. `model.DescriptorGenerator` builds the file with KotlinPoet. It is also pure Kotlin, so its
    output is unit-tested as text.
 6. The file is written through KSP's `CodeGenerator` as an aggregating output depending on all

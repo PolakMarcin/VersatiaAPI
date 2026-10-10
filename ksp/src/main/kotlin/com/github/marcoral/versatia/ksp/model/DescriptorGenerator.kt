@@ -1,7 +1,6 @@
 package com.github.marcoral.versatia.ksp.model
 
 import com.github.marcoral.versatia.EventType
-import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
 import com.github.marcoral.versatia.engine.descriptor.ClassTarget
 import com.github.marcoral.versatia.engine.descriptor.EnhancedElement
@@ -65,7 +64,7 @@ internal object DescriptorGenerator {
     private fun versionProperty(name: String, value: Int) = PropertySpec.builder(name, INT, KModifier.OVERRIDE).initializer("%L", value).build()
 
     private fun elements(model: DescriptorModel) = listOf(
-        listOfNotNull(model.plugin?.let(::pluginElement)),
+        model.plugin?.let(::pluginElements).orEmpty(),
         model.beans.flatMap { bean -> bean.enhancements.map { element(it, bean.scope, classTarget(bean)) } },
         model.functions.flatMap { function -> function.enhancements.map { element(it, function.annotation, functionTarget(function)) } },
     ).flatten().let { elements ->
@@ -82,17 +81,16 @@ internal object DescriptorGenerator {
             .add("⇤)")
             .build()
 
-    /** The main class goes to its own processor; nothing was annotated. */
-    private fun pluginElement(plugin: PluginDeclaration) = CodeBlock.builder()
-        .add("%T(\n⇥", enhancedElement)
-        .add("processorClass = %S,\n", BeanProcessors.PLUGIN)
-        .add("phase = %T.%L,\n", eventType, EventType.PLUGIN_START_ONLY.name)
-        .add("annotation = null,\n")
-        .add("target = %T(\n⇥", pluginTarget)
+    /** One element per enhancement of the main class, all sharing its target. */
+    private fun pluginElements(plugin: PluginDeclaration) = plugin.enhancements.flatMap { enhanced ->
+        enhanced.enhancements.map { element(it, enhanced.annotation, pluginTarget(plugin)) }
+    }
+
+    private fun pluginTarget(plugin: PluginDeclaration) = CodeBlock.builder()
+        .add("%T(\n⇥", pluginTarget)
         .add("className = %S,\n", plugin.type.canonicalName)
         .add("assignableTypes = %L,\n", stringList(plugin.assignableTypes.map { it.canonicalName }))
         .add("annotations = %L,\n", occurrences(plugin.annotations))
-        .add("⇤),\n")
         .add("⇤)")
         .build()
 

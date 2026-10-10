@@ -19,7 +19,7 @@ internal object BeanGraphValidator {
         plugin: PluginDeclaration? = null,
         pluginTypes: Set<ClassName> = emptySet(),
     ): List<BeanProblem> {
-        val beans = listOfNotNull(plugin?.asBean()) + declared
+        val beans = listOfNotNull(plugin?.takeIf { it.isBean }?.asBean()) + declared
         val problems = mutableListOf<BeanProblem>()
         val edges = mutableMapOf<BeanDeclaration, MutableList<BeanDeclaration>>()
 

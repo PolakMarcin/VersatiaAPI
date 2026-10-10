@@ -2,6 +2,7 @@ package com.github.marcoral.versatia.ksp
 
 import com.github.marcoral.versatia.EventType
 import com.github.marcoral.versatia.di.BeanProcessors
+import com.github.marcoral.versatia.di.PluginBean
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
 import com.github.marcoral.versatia.engine.descriptor.ClassTarget
 import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
@@ -12,6 +13,8 @@ import com.github.marcoral.versatia.engine.descriptor.Parameter
 import com.github.marcoral.versatia.engine.descriptor.PluginTarget
 import com.github.marcoral.versatia.engine.descriptor.VersatiaPluginDescriptor
 import com.github.marcoral.versatia.lifecycle.LifecycleProcessors
+import com.github.marcoral.versatia.resources.ExtractResources
+import com.github.marcoral.versatia.resources.ResourceProcessors
 import com.tschuchort.compiletesting.JvmCompilationResult
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
@@ -298,6 +301,7 @@ class VersatiaSymbolProcessorTest {
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.di.Bean
                 import com.github.marcoral.versatia.di.BeanProcessors
+import com.github.marcoral.versatia.di.PluginBean
 
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
@@ -613,7 +617,7 @@ class VersatiaSymbolProcessorTest {
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val elements = result.descriptor("com.example.alpha").elements
         assertEquals(2, elements.count { it.target is ClassTarget })
-        assertEquals("com.example.alpha.AlphaPlugin", (elements.single { it.target is PluginTarget }.target as PluginTarget).className)
+        assertEquals("com.example.alpha.AlphaPlugin", (elements.first { it.target is PluginTarget }.target as PluginTarget).className)
     }
 
     @Test
@@ -641,10 +645,14 @@ class VersatiaSymbolProcessorTest {
         )
 
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
-        val element = result.descriptor().elements.first()
+        val elements = result.descriptor().elements
+        val element = elements.first()
         assertEquals(BeanProcessors.PLUGIN, element.processorClass)
         assertEquals(EventType.PLUGIN_START_ONLY, element.phase)
-        assertNull(element.annotation, "nothing was annotated")
+        assertEquals(AnnotationOccurrence(PluginBean::class.java.name), element.annotation, "inherited from VersatiaPlugin")
+        assertEquals(ResourceProcessors.EXTRACT, elements[1].processorClass, "VersatiaPlugin's second enhancement")
+        assertEquals(AnnotationOccurrence(ExtractResources::class.java.name), elements[1].annotation)
+        assertEquals(element.target, elements[1].target)
         val plugin = assertIs<PluginTarget>(element.target)
         assertEquals("com.example.alpha.AlphaPlugin", plugin.className)
         assertEquals(listOf(AnnotationOccurrence(primary)), plugin.annotations)
@@ -720,6 +728,39 @@ class VersatiaSymbolProcessorTest {
         )
         assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, several.exitCode)
         assertContains(several.messages, "Several classes extend org.bukkit.plugin.java.JavaPlugin: com.example.alpha.First, com.example.alpha.Second")
+    }
+
+    @Test
+    fun `inherits enhancements from a plugin base class`() {
+        val result = compile(
+            SourceFile.kotlin(
+                "Base.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.VersatiaEnhancement
+                import com.github.marcoral.versatia.VersatiaPlugin
+
+                @Target(AnnotationTarget.CLASS)
+                @Retention(AnnotationRetention.BINARY)
+                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = EventType.PLUGIN_STOP)
+                annotation class Audited(val channel: String)
+
+                @Audited("console")
+                abstract class BasePlugin : VersatiaPlugin()
+
+                class AlphaPlugin : BasePlugin()
+                """,
+            ),
+            mainClass = null,
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        val audit = result.descriptor().elements.single { it.processorClass == "com.example.test.AuditEnhancementProcessor" }
+        assertEquals(EventType.PLUGIN_STOP, audit.phase)
+        assertEquals(AnnotationOccurrence("com.example.alpha.Audited", mapOf("channel" to "console")), audit.annotation)
+        assertEquals("com.example.alpha.AlphaPlugin", assertIs<PluginTarget>(audit.target).className)
     }
 
     @Test

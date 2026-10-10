@@ -1,11 +1,16 @@
 package com.github.marcoral.versatia
 
+import com.github.marcoral.versatia.di.PluginBean
+import com.github.marcoral.versatia.resources.ExtractResources
 import org.bukkit.plugin.java.JavaPlugin
 
 /**
  * Base class of Versatia plugins. There is nothing to override: declare beans and mark functions
- * with `@AutoInvoke` instead; see docs/enhancements.md.
+ * with `@AutoInvoke` instead. The enhancements declared here apply to every plugin extending the
+ * class, as they would to any base class of a main class; see docs/enhancements.md.
  */
+@PluginBean
+@ExtractResources
 abstract class VersatiaPlugin : JavaPlugin() {
     final override fun onEnable() {
         val engine = server.servicesManager.load(VersatiaEngine::class.java)

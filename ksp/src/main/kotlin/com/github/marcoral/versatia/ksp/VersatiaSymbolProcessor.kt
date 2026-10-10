@@ -33,7 +33,7 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
         val attributes = Attributes(enhancements, environment.logger)
         val beanCollector = BeanCollector(environment.logger, mainClass, enhancements, attributes)
         val beans = beanCollector.collect(files)
-        val plugin = beanCollector.describePlugin()
+        val plugin = beanCollector.describePlugin(PluginCollector(enhancements, attributes).collect(mainClass))
         val functionCollector = FunctionCollector(environment.logger, beans.map { it.type }.toSet(), enhancements, attributes)
         val functions = functionCollector.collect(files)
 

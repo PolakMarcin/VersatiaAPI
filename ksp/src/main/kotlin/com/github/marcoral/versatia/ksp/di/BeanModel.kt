@@ -1,8 +1,10 @@
 package com.github.marcoral.versatia.ksp.di
 
 import com.github.marcoral.versatia.di.BeanNames
+import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.ksp.model.AnnotationRef
 import com.github.marcoral.versatia.ksp.model.Enhancement
+import com.github.marcoral.versatia.ksp.model.EnhancedAnnotation
 import com.github.marcoral.versatia.ksp.model.ParameterDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.squareup.kotlinpoet.ClassName
@@ -30,17 +32,21 @@ internal data class BeanDeclaration(
 }
 
 /**
- * The plugin's main class: a local bean of its own plugin, always named `BeanNames.PLUGIN`, whose
- * instance Bukkit creates, so it has no dependencies and nothing to instantiate. Takes part in
- * validation like any other bean.
+ * The plugin's main class with the enhancements written on it or on its supertypes. With
+ * `@PluginBean` among them it is a local bean of its own plugin, always named `BeanNames.PLUGIN`,
+ * whose instance Bukkit creates, so it has no dependencies and nothing to instantiate; it then
+ * takes part in validation like any other bean.
  */
 internal data class PluginDeclaration(
     val type: ClassName,
     val primary: Boolean,
     val annotations: List<AnnotationRef>,
     val assignableTypes: List<ClassName>,
+    val enhancements: List<EnhancedAnnotation> = emptyList(),
     val node: KSNode? = null,
 ) {
+    val isBean get() = enhancements.any { enhanced -> enhanced.enhancements.any { it.processorClass == BeanProcessors.PLUGIN } }
+
     fun asBean() = BeanDeclaration(
         type = type,
         name = BeanNames.PLUGIN,

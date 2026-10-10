@@ -20,8 +20,9 @@ that deliver no feature of their own but are needed for the framework to work.
 |--------------------------|---------------------------------------------------------------------------|
 | `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `EnhancementProcessor`, `EnhancementContext`, `StateStore`, `EventType`, `LifecycleEvent`, `EnhancementException`) and the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`) |
 | `engine.descriptor`      | Model of the generated descriptor: `VersatiaPluginDescriptor`, `EnhancedElement`, `AnnotationOccurrence`, `ClassTarget`, `FunctionTarget`, `PluginTarget`, `Parameter`, `Instantiator`, `Invoker`, `DescriptorVersion` |
-| `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`; `@Qualifier`, `@Primary`; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
+| `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@PluginBean`; `@Qualifier`, `@Primary`; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
 | `lifecycle`              | `@AutoInvoke`, functions called at a lifecycle phase; `LifecycleProcessors` |
+| `resources`              | `@ExtractResources`, files shipped in the JAR extracted to the data folder; `ResourceProcessors` |
 | `util.*`                 | Independent helpers, described below                                      |
 
 The framework packages are documented in [enhancements.md](enhancements.md). All helpers live

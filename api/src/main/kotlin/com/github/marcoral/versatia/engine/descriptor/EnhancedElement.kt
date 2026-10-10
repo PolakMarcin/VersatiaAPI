@@ -6,8 +6,8 @@ import com.github.marcoral.versatia.EventType
 data class EnhancedElement(
     val processorClass: String,
     val phase: EventType,
-    /** The enhancement annotation that produced the element; null for the plugin's main class, which none does. */
-    val annotation: AnnotationOccurrence?,
+    /** The enhancement annotation that produced the element, as written on the target or, for the main class, on one of its supertypes. */
+    val annotation: AnnotationOccurrence,
     val target: ElementTarget,
 )
 

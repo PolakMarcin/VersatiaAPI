@@ -178,19 +178,26 @@ class DescriptorGeneratorTest {
     }
 
     @Test
-    fun `emits the main class as a local bean without an annotation`() {
+    fun `emits one element per enhancement of the main class`() {
         val plugin = PluginDeclaration(
             type = ClassName("com.example", "MyPlugin"),
             primary = false,
             annotations = emptyList(),
             assignableTypes = listOf(ClassName("com.example", "MyPlugin"), ClassName("org.bukkit.plugin.java", "JavaPlugin")),
+            enhancements = listOf(
+                EnhancedAnnotation(AnnotationRef(ClassName("com.github.marcoral.versatia.di", "PluginBean")), listOf(Enhancement(BeanProcessors.PLUGIN, EventType.PLUGIN_START_ONLY))),
+                EnhancedAnnotation(AnnotationRef(ClassName("com.example", "Audited")), listOf(Enhancement("com.example.AuditEnhancementProcessor", EventType.PLUGIN_STOP))),
+            ),
         )
 
         val code = DescriptorGenerator.generate(DescriptorModel("com.example", listOf(bean(ClassName("com.example", "Clock"))), plugin = plugin)).toString()
 
         assertContains(code, "processorClass = \"com.github.marcoral.versatia.di.PluginBeanEnhancementProcessor\"")
-        assertContains(code, "annotation = null")
-        assertContains(code, "target = PluginTarget(")
+        assertContains(code, "annotation = AnnotationOccurrence(\"com.github.marcoral.versatia.di.PluginBean\")")
+        assertContains(code, "processorClass = \"com.example.AuditEnhancementProcessor\"")
+        assertContains(code, "phase = EventType.PLUGIN_STOP")
+        assertContains(code, "annotation = AnnotationOccurrence(\"com.example.Audited\")")
+        assertEquals(2, Regex("target = PluginTarget\\(").findAll(code).count())
         assertContains(code, "className = \"com.example.MyPlugin\"")
         assertContains(code, "assignableTypes = listOf(\"com.example.MyPlugin\", \"org.bukkit.plugin.java.JavaPlugin\")")
         assertFalse("name =" in code, "the plugin bean has no name of its own")

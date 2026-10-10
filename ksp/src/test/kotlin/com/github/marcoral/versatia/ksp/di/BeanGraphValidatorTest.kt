@@ -1,8 +1,10 @@
 package com.github.marcoral.versatia.ksp.di
 
 import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
 import com.github.marcoral.versatia.ksp.model.AnnotationRef
+import com.github.marcoral.versatia.ksp.model.EnhancedAnnotation
 import com.github.marcoral.versatia.ksp.model.Enhancement
 import com.github.marcoral.versatia.ksp.model.FunctionDeclaration
 import com.github.marcoral.versatia.ksp.model.ParameterDeclaration
@@ -125,9 +127,13 @@ class BeanGraphValidatorTest {
 
     @Test
     fun `the main class provides its types under the reserved name plugin`() {
-        val plugin = PluginDeclaration(type("Main"), primary = false, annotations = emptyList(), assignableTypes = listOf(type("Main"), type("JavaPlugin")))
+        val types = listOf(type("Main"), type("JavaPlugin"))
+        val pluginBean = EnhancedAnnotation(AnnotationRef(type("PluginBean")), listOf(Enhancement(BeanProcessors.PLUGIN, EventType.PLUGIN_START_ONLY)))
+        val plugin = PluginDeclaration(type("Main"), primary = false, annotations = emptyList(), assignableTypes = types, enhancements = listOf(pluginBean))
 
         assertEquals(emptyList(), messages(listOf(bean("Consumer", dep("JavaPlugin"), dep("Main", "plugin"))), plugin = plugin))
+        val notABean = plugin.copy(enhancements = emptyList())
+        assertEquals(emptyList(), messages(listOf(bean("Other", name = "plugin")), plugin = notABean), "without @PluginBean the name is free")
         assertContains(messages(listOf(bean("Consumer", dep("Clock", "plugin"))), plugin = plugin).single(), "Bean \"plugin\" (com.example.Main) does not provide com.example.Clock")
         assertEquals(
             listOf("Bean name \"plugin\" is reserved for the plugin's main class; rename com.example.Other with @Qualifier"),
