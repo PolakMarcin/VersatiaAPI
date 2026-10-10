@@ -3,6 +3,7 @@ package com.github.marcoral.versatia.ksp.di
 import com.github.marcoral.versatia.di.BeanNames
 import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.ksp.model.AnnotationRef
+import com.github.marcoral.versatia.ksp.model.ClassDeclaration
 import com.github.marcoral.versatia.ksp.model.Enhancement
 import com.github.marcoral.versatia.ksp.model.EnhancedAnnotation
 import com.github.marcoral.versatia.ksp.model.ParameterDeclaration
@@ -29,6 +30,9 @@ internal data class BeanDeclaration(
     val node: KSNode? = null,
 ) {
     val dependencies get() = parameters.map { it.toDependency() }
+
+    /** The facts the descriptor's `ClassTarget` records. */
+    fun asClass() = ClassDeclaration(type, annotations, parameters, assignableTypes, reachable, node = node)
 }
 
 /**

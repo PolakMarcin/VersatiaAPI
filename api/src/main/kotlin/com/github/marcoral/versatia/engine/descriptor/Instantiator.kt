@@ -6,7 +6,7 @@ import java.lang.reflect.InvocationTargetException
 sealed interface Instantiator {
     fun create(classLoader: ClassLoader, arguments: List<Any?>): Any
 
-    /** Generated code calls the constructor itself; used whenever the class is visible to it. */
+    /** Generated code calls the constructor (or names the object) itself; used whenever the class is visible to it. */
     class Direct(private val factory: (List<Any?>) -> Any) : Instantiator {
         override fun create(classLoader: ClassLoader, arguments: List<Any?>) = factory(arguments)
 
@@ -32,5 +32,11 @@ sealed interface Instantiator {
                 throw e.targetException
             }
         }
+    }
+
+    /** Fallback for private Kotlin `object`s: the single instance, read from its static field. */
+    data class ObjectInstance(val binaryClassName: String) : Instantiator {
+        override fun create(classLoader: ClassLoader, arguments: List<Any?>): Any =
+            Class.forName(binaryClassName, true, classLoader).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null)
     }
 }

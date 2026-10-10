@@ -2,7 +2,9 @@ package com.github.marcoral.versatia.ksp
 
 import com.github.marcoral.versatia.EventType
 import com.github.marcoral.versatia.VersatiaEnhancement
+import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 import com.github.marcoral.versatia.ksp.model.Enhancement
+import com.github.marcoral.versatia.ksp.model.SubclassEnhancement
 import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.KSAnnotation
@@ -10,6 +12,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Origin
+import com.squareup.kotlinpoet.ksp.toClassName
 
 /**
  * Walks the annotations an annotation *inherits* (its meta-annotations, transitively) and resolves
@@ -22,6 +25,8 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
 
     private val enhancementName = VersatiaEnhancement::class.qualifiedName!!
     private val containerName = "$enhancementName.Container"
+    private val subclassName = VersatiaSubclassEnhancement::class.qualifiedName!!
+    private val subclassContainerName = "$subclassName.Container"
     private val eventTypeName = EventType::class.qualifiedName!!
 
     /** A visited annotation class together with the occurrence through which it was reached. */
@@ -51,9 +56,29 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
      */
     fun enhancementsOf(chain: List<Link>, usage: KSNode) = chain.flatMap { link ->
         link.declaration.annotations
-            .flatMap(::unwrapRepeatable)
+            .flatMap { unwrapRepeatable(it, containerName) }
             .filter { it.declaration()?.qualifiedName?.asString() == enhancementName }
             .mapNotNull { resolve(it, link, usage) }
+    }
+
+    /** Subclass enhancements declared along [chain]; errors are reported like in [enhancementsOf]. */
+    fun subclassEnhancementsOf(chain: List<Link>, usage: KSNode) = chain.flatMap { link ->
+        link.declaration.annotations
+            .flatMap { unwrapRepeatable(it, subclassContainerName) }
+            .filter { it.declaration()?.qualifiedName?.asString() == subclassName }
+            .mapNotNull { resolveSubclass(it, link, usage) }
+    }
+
+    private fun resolveSubclass(enhancement: KSAnnotation, carrier: Link, usage: KSNode): SubclassEnhancement? {
+        val carrierName = carrier.declaration.simpleName.asString()
+        val reportAt = if (carrier.declaration.origin == Origin.KOTLIN) carrier.declaration else usage
+        val processorClass = (enhancement.argument("processorClass") as? String)?.takeIf { it.isNotBlank() }
+            ?: return fail(reportAt, "@VersatiaSubclassEnhancement on $carrierName has no processorClass")
+        val subclassOf = (enhancement.argument("subclassOf") as? KSType)?.declaration as? KSClassDeclaration
+            ?: return fail(reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName names no class in subclassOf")
+        val phase = enhancement.argument("enhancementPhase").asEventType()
+        if (phase == EventType._NULL) return fail(reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName must set enhancementPhase to a phase other than _NULL")
+        return SubclassEnhancement(processorClass, phase, subclassOf.toClassName())
     }
 
     private fun resolve(enhancement: KSAnnotation, carrier: Link, usage: KSNode): Enhancement? {
@@ -99,13 +124,10 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
         return phase
     }
 
-    /** Several `@VersatiaEnhancement`s compiled into a class arrive as one `Container` annotation. */
-    private fun unwrapRepeatable(annotation: KSAnnotation) =
-        if (annotation.declaration()?.qualifiedName?.asString() != containerName) listOf(annotation)
+    /** Several occurrences of a repeatable annotation compiled into a class arrive as one `Container` annotation. */
+    private fun unwrapRepeatable(annotation: KSAnnotation, container: String) =
+        if (annotation.declaration()?.qualifiedName?.asString() != container) listOf(annotation)
         else (annotation.argument("value") as? List<*>).orEmpty().filterIsInstance<KSAnnotation>()
-
-    private fun KSAnnotation.argument(name: String) = arguments.firstOrNull { it.name?.asString() == name }?.value
-            ?: defaultArguments.firstOrNull { it.name?.asString() == name }?.value
 
     private fun Any?.asEventType() = when (this) {
         is KSClassDeclaration -> simpleName.asString()
@@ -120,5 +142,9 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
         return null
     }
 }
+
+/** The value written for [name], or its default. */
+internal fun KSAnnotation.argument(name: String) = arguments.firstOrNull { it.name?.asString() == name }?.value
+    ?: defaultArguments.firstOrNull { it.name?.asString() == name }?.value
 
 internal fun KSAnnotation.declaration() = annotationType.resolve().declaration as? KSClassDeclaration

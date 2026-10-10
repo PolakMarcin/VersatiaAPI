@@ -2,13 +2,19 @@ package com.github.marcoral.versatia.engine.descriptor
 
 import com.github.marcoral.versatia.EventType
 
-/** One recorded occurrence of an enhancement: who interprets it, when, and what was annotated. */
+/** One recorded occurrence of an enhancement: who interprets it, when, what was annotated and where. */
 data class EnhancedElement(
     val processorClass: String,
     val phase: EventType,
-    /** The enhancement annotation that produced the element, as written on the target or, for the main class, on one of its supertypes. */
+    /** The enhancement annotation that produced the element, as written at [origin]. */
     val annotation: AnnotationOccurrence,
     val target: ElementTarget,
+    /**
+     * The class [annotation] is physically written on: the target's own class for most elements, a
+     * base class of the main class for inherited enhancements, and the class carrying a subclass
+     * enhancement for the elements it produces.
+     */
+    val origin: String = target.className,
 )
 
 /**
@@ -23,7 +29,9 @@ data class AnnotationOccurrence(
 /** The occurrence of [annotationClass] among these, if any. */
 fun List<AnnotationOccurrence>.occurrenceOf(annotationClass: String) = firstOrNull { it.annotationClass == annotationClass }
 
-sealed interface ElementTarget
+sealed interface ElementTarget {
+    val className: String
+}
 
 /** A constructor or function parameter: its type and the recorded annotations on it. */
 data class Parameter(
@@ -36,7 +44,7 @@ data class Parameter(
  * (`com.example.Outer.Inner`).
  */
 data class ClassTarget(
-    val className: String,
+    override val className: String,
     /** The class itself and every supertype except `Any`. */
     val assignableTypes: List<String>,
     val annotations: List<AnnotationOccurrence>,
@@ -46,7 +54,7 @@ data class ClassTarget(
 
 /** The plugin's main class. Bukkit creates the instance; processors only get to use it. */
 data class PluginTarget(
-    val className: String,
+    override val className: String,
     /** The class itself and every supertype except `Any`. */
     val assignableTypes: List<String>,
     val annotations: List<AnnotationOccurrence>,
@@ -64,7 +72,7 @@ enum class FunctionOwner {
 
 /** A function the runtime may call. [binaryClassName] is the JVM name of the declaring class. */
 data class FunctionTarget(
-    val className: String,
+    override val className: String,
     val binaryClassName: String,
     val functionName: String,
     val owner: FunctionOwner,

@@ -1,5 +1,6 @@
 package com.github.marcoral.versatia.ksp.di
 
+import com.github.marcoral.versatia.ksp.model.ClassDeclaration
 import com.github.marcoral.versatia.ksp.model.FunctionDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.squareup.kotlinpoet.ClassName
@@ -8,15 +9,18 @@ import com.github.marcoral.versatia.di.BeanProcessors
 internal data class BeanProblem(val node: KSNode?, val message: String)
 
 /**
- * Compile-time checks over the beans and enhanced functions of one plugin: unique names, resolvable
- * dependencies and no cycles. Mirrors the runtime's resolution rules for the local beans; see
- * docs/enhancements.md.
+ * Compile-time checks over the beans, enhanced functions and other instantiated classes of one
+ * plugin: unique names, resolvable dependencies, no cycles, and prototypes that take the plugin
+ * only as a type every plugin has ([pluginTypes], the assignable types of `VersatiaPlugin`),
+ * since a prototype's plugin parameter receives the consuming plugin. Mirrors the runtime's
+ * resolution rules for the local beans; see docs/enhancements.md.
  */
 internal object BeanGraphValidator {
     fun validate(
         declared: List<BeanDeclaration>,
         functions: List<FunctionDeclaration> = emptyList(),
         plugin: PluginDeclaration? = null,
+        classes: List<ClassDeclaration> = emptyList(),
         pluginTypes: Set<ClassName> = emptySet(),
     ): List<BeanProblem> {
         val beans = listOfNotNull(plugin?.takeIf { it.isBean }?.asBean()) + declared
@@ -59,6 +63,10 @@ internal object BeanGraphValidator {
         for (function in functions) for (parameter in function.parameters) {
             val outcome = resolveLocally(parameter.toDependency(), "${function.owner.canonicalName}.${function.name}()", beans)
             if (outcome is Resolution.Problem) problems += BeanProblem(function.node, outcome.message)
+        }
+        for (clazz in classes) for (parameter in clazz.parameters) {
+            val outcome = resolveLocally(parameter.toDependency(), clazz.type.canonicalName, beans)
+            if (outcome is Resolution.Problem) problems += BeanProblem(clazz.node, outcome.message)
         }
 
         problems += findCycles(beans, edges)

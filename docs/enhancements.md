@@ -65,8 +65,9 @@ element carries
 |------------------|---------------------------------------------------------------------------|
 | `processorClass` | the processor that interprets it                                          |
 | `phase`          | the `EventType` at which it runs; see [Phases](#phases)                   |
-| `annotation`     | the enhancement annotation that produced it, with its arguments; for the main class it may have been written on a supertype |
+| `annotation`     | the enhancement annotation that produced it, with its arguments           |
 | `target`         | what was annotated                                                        |
+| `origin`         | the class the annotation is physically written on: the target's own class, a base class of the main class for inherited enhancements, the class carrying a `@VersatiaSubclassEnhancement` for the elements it produces |
 
 The descriptor records facts about the annotated code, never what a feature makes of them. A
 `ClassTarget` has the class name, its `assignableTypes` (itself plus every supertype except
@@ -107,6 +108,9 @@ Encapsulation is preserved: beans, their constructors, functions and their param
 - **`Instantiator.Reflective` / `Invoker.Reflective`** otherwise. They store JVM binary names
   (`com.example.Outer$Hidden`) and at runtime load the class **without initialising it**
   (`Class.forName(name, false, loader)`), find the matching declared member and make it accessible.
+- A Kotlin `object` enhanced through a subclass enhancement gets `Instantiator.Direct { _ -> Console }`
+  when it is reachable and `Instantiator.ObjectInstance(binaryName)`, which reads its `INSTANCE`
+  field, otherwise.
 
 ## Phases
 
@@ -354,6 +358,11 @@ generates nothing when any of them fires:
 - a prototype whose plugin parameter is not `VersatiaPlugin` or a supertype: it receives the
   consuming plugin, so the owner's own class would not fit every consumer;
 - an attribute argument the descriptor cannot hold;
+- a plugin enhancement or a `@DisableVersatiaFeatures` on a class that is not a `JavaPlugin`
+  subclass, a switch that turns nothing off, or a class that both carries and switches off the
+  same enhancement;
+- a class matched by a subclass enhancement that is inner, generic or has more than one
+  constructor, or whose constructor parameters are not injectable;
 - a scope annotation that inherits `@Bean` but no `@VersatiaEnhancement`, or one that sends a
   bean processor anything but `PLUGIN_START_ONLY`;
 - a `@VersatiaEnhancement` without `processorClass` or whose phase is not declared exactly once
@@ -402,6 +411,43 @@ an abstract base plugin in a library can add enhancements for the plugins extend
 way. The `PluginTarget` is the same for all of them: class name, assignable types and attributes,
 nothing to construct. A processor that expects the main class accepts only that target and only
 once per plugin.
+
+`PluginCollector` walks the lineage nearest first (the main class, its superclasses, then the
+interfaces) and records the first occurrence of each enhancement annotation, so a subclass
+overrides a base class's arguments. `@DisableVersatiaFeatures` switches a feature off for the
+classes below the one carrying it: each of its `Boolean` parameters is marked
+`@VersatiaDisabler(Enhancement::class)`, and a parameter set to `true` leaves that enhancement
+out, unless a class nearer to the main class declares it again. The collector knows no feature;
+it reads the mapping from the parameter annotations, so a library can define a switch for its own
+base-class enhancements the same way. Plugin enhancements and switches are accepted only on
+`JavaPlugin` subclasses: elsewhere they would do nothing, so they are compile errors, as is a
+switch that turns nothing off and a class that both carries and switches off an enhancement.
+
+## Subclass enhancements
+
+`@VersatiaSubclassEnhancement(processorClass, subclassOf, enhancementPhase)` is the second kind of
+enhancement declaration, next to `@VersatiaEnhancement`. Written on an annotation class, it makes
+every class in the plugin's sources that is assignable to `subclassOf` an element, as if the
+annotation had been written on that class: concrete classes with one injectable constructor become
+`ClassTarget`s like beans (validated the same way, dependencies checked by the bean graph
+validator), objects become `ClassTarget`s with an object instantiator, the main class becomes its
+`PluginTarget`; abstract classes and interfaces are skipped. The annotation carrying it is written
+on the main class or on a base class of it, follows the lineage rules above (nearest declaration,
+`@DisableVersatiaFeatures`), and is recorded as each element's `origin`:
+
+```kotlin
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.BINARY)
+@VersatiaSubclassEnhancement("com.example.audit.AuditEnhancementProcessor", Auditable::class, EventType.PLUGIN_START_ONLY)
+annotation class AuditSubclasses
+
+@AuditSubclasses
+abstract class AuditedPlugin : VersatiaPlugin()
+```
+
+The `ksp.SubclassCollector` applies the rules `PluginCollector` found; it knows no feature. A class
+matched by a subclass enhancement that is also a bean produces both elements, so a processor that
+needs the instance should ask the `BeanResolver` first and instantiate only when there is no bean.
 
 ## Plugin resources
 
@@ -462,7 +508,9 @@ The module mirrors the feature packages of the API: `ksp` holds what every featu
    class (or reads it from `plugin.yml` when the option is set). `EnhancementResolver` resolves
    the enhancements an annotation inherits; `Attributes` records attribute occurrences and turns
    annotation arguments into descriptor values; `PluginCollector` gathers the enhancement
-   annotations on the main class and its supertypes.
+   annotations on the main class and its supertypes, applies the switches of
+   `@DisableVersatiaFeatures` and checks where both are used; `SubclassCollector` turns the
+   subclass enhancements among them into elements for the matching source classes.
 2. `di.BeanCollector` walks every class declaration in the sources (compile-time scanning is fine,
    runtime scanning is not) and, for each annotation on a class, checks whether it inherits
    `@Bean`. Hits become `BeanDeclaration`s: type, name, scope occurrence, enhancements, attributes,

@@ -11,8 +11,8 @@ import com.github.marcoral.versatia.engine.descriptor.Invoker
 import com.github.marcoral.versatia.engine.descriptor.Parameter
 import com.github.marcoral.versatia.engine.descriptor.PluginTarget
 import com.github.marcoral.versatia.engine.descriptor.VersatiaPluginDescriptor
-import com.github.marcoral.versatia.ksp.di.BeanDeclaration
 import com.github.marcoral.versatia.ksp.di.PluginDeclaration
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
@@ -37,6 +37,7 @@ internal object DescriptorGenerator {
     private val functionOwner = FunctionOwner::class.asClassName()
     private val direct = Instantiator.Direct::class.asClassName()
     private val reflective = Instantiator.Reflective::class.asClassName()
+    private val objectInstance = Instantiator.ObjectInstance::class.asClassName()
     private val directInvoker = Invoker.Direct::class.asClassName()
     private val reflectiveInvoker = Invoker.Reflective::class.asClassName()
     private val eventType = EventType::class.asClassName()
@@ -65,25 +66,30 @@ internal object DescriptorGenerator {
 
     private fun elements(model: DescriptorModel) = listOf(
         model.plugin?.let(::pluginElements).orEmpty(),
-        model.beans.flatMap { bean -> bean.enhancements.map { element(it, bean.scope, classTarget(bean)) } },
-        model.functions.flatMap { function -> function.enhancements.map { element(it, function.annotation, functionTarget(function)) } },
+        model.beans.flatMap { bean -> bean.enhancements.map { element(it, bean.scope, classTarget(bean.asClass()), bean.type) } },
+        model.functions.flatMap { function -> function.enhancements.map { element(it, function.annotation, functionTarget(function), function.owner) } },
+        model.subclasses.map { subclass ->
+            val target = subclass.clazz?.let(::classTarget) ?: pluginTarget(model.plugin!!)
+            element(subclass.enhancement, subclass.annotation, target, subclass.origin)
+        },
     ).flatten().let { elements ->
         if (elements.isEmpty()) CodeBlock.of("emptyList()")
         else CodeBlock.builder().add("listOf(\n⇥").apply { elements.forEach { add("%L,\n", it) } }.add("⇤)").build()
     }
 
-    private fun element(enhancement: Enhancement, annotation: AnnotationRef, target: CodeBlock) = CodeBlock.builder()
-            .add("%T(\n⇥", enhancedElement)
-            .add("processorClass = %S,\n", enhancement.processorClass)
-            .add("phase = %T.%L,\n", eventType, enhancement.phase.name)
-            .add("annotation = %L,\n", occurrence(annotation))
-            .add("target = %L,\n", target)
-            .add("⇤)")
-            .build()
+    private fun element(enhancement: Enhancement, annotation: AnnotationRef, target: CodeBlock, origin: ClassName) = CodeBlock.builder()
+        .add("%T(\n⇥", enhancedElement)
+        .add("processorClass = %S,\n", enhancement.processorClass)
+        .add("phase = %T.%L,\n", eventType, enhancement.phase.name)
+        .add("annotation = %L,\n", occurrence(annotation))
+        .add("target = %L,\n", target)
+        .add("origin = %S,\n", origin.canonicalName)
+        .add("⇤)")
+        .build()
 
     /** One element per enhancement of the main class, all sharing its target. */
     private fun pluginElements(plugin: PluginDeclaration) = plugin.enhancements.flatMap { enhanced ->
-        enhanced.enhancements.map { element(it, enhanced.annotation, pluginTarget(plugin)) }
+        enhanced.enhancements.map { element(it, enhanced.annotation, pluginTarget(plugin), enhanced.origin ?: plugin.type) }
     }
 
     private fun pluginTarget(plugin: PluginDeclaration) = CodeBlock.builder()
@@ -94,27 +100,22 @@ internal object DescriptorGenerator {
         .add("⇤)")
         .build()
 
-    private fun classTarget(bean: BeanDeclaration) = CodeBlock.builder()
+    private fun classTarget(clazz: ClassDeclaration) = CodeBlock.builder()
         .add("%T(\n⇥", classTarget)
-        .add("className = %S,\n", bean.type.canonicalName)
-        .add("assignableTypes = %L,\n", stringList(bean.assignableTypes.map { it.canonicalName }))
-        .add("annotations = %L,\n", occurrences(bean.annotations))
-        .add("constructorParameters = %L,\n", parameters(bean.parameters))
-        .add("instantiator = %L,\n", instantiator(bean))
+        .add("className = %S,\n", clazz.type.canonicalName)
+        .add("assignableTypes = %L,\n", stringList(clazz.assignableTypes.map { it.canonicalName }))
+        .add("annotations = %L,\n", occurrences(clazz.annotations))
+        .add("constructorParameters = %L,\n", parameters(clazz.parameters))
+        .add("instantiator = %L,\n", instantiator(clazz))
         .add("⇤)")
         .build()
 
-    private fun instantiator(bean: BeanDeclaration) = if (bean.reachable) directInstantiator(bean) else reflectiveInstantiator(bean)
-
-    private fun directInstantiator(bean: BeanDeclaration) =
-        CodeBlock.of("%T { %L -> %T(%L) }", direct, if (bean.parameters.isEmpty()) "_" else "args", bean.type, castArguments(bean.parameters))
-
-    private fun reflectiveInstantiator(bean: BeanDeclaration) = CodeBlock.of(
-        "%T(%S, %L)",
-        reflective,
-        bean.type.reflectionName(),
-        stringList(bean.parameters.map { it.type.reflectionName() }),
-    )
+    private fun instantiator(clazz: ClassDeclaration) = when {
+        clazz.isObject && clazz.reachable -> CodeBlock.of("%T { _ -> %T }", direct, clazz.type)
+        clazz.isObject -> CodeBlock.of("%T(%S)", objectInstance, clazz.type.reflectionName())
+        clazz.reachable -> CodeBlock.of("%T { %L -> %T(%L) }", direct, if (clazz.parameters.isEmpty()) "_" else "args", clazz.type, castArguments(clazz.parameters))
+        else -> CodeBlock.of("%T(%S, %L)", reflective, clazz.type.reflectionName(), stringList(clazz.parameters.map { it.type.reflectionName() }))
+    }
 
     private fun functionTarget(function: FunctionDeclaration) = CodeBlock.builder()
         .add("%T(\n⇥", functionTarget)

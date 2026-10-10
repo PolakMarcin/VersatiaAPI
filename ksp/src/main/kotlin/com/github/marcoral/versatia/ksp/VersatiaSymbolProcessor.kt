@@ -31,16 +31,21 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
 
         val enhancements = EnhancementResolver(environment.logger)
         val attributes = Attributes(enhancements, environment.logger)
+        val pluginCollector = PluginCollector(environment.logger, enhancements, attributes)
+        pluginCollector.validate(files)
         val beanCollector = BeanCollector(environment.logger, mainClass, enhancements, attributes)
         val beans = beanCollector.collect(files)
-        val plugin = beanCollector.describePlugin(PluginCollector(enhancements, attributes).collect(mainClass))
+        val plugin = beanCollector.describePlugin(pluginCollector.collect(mainClass))
         val functionCollector = FunctionCollector(environment.logger, beans.map { it.type }.toSet(), enhancements, attributes)
         val functions = functionCollector.collect(files)
+        val subclassCollector = SubclassCollector(environment.logger, mainClass, attributes)
+        val subclasses = subclassCollector.collect(files, plugin.enhancements)
 
         val pluginTypes = resolver.getClassDeclarationByName(VERSATIA_PLUGIN)?.assignableTypes()?.toSet().orEmpty()
-        val problems = BeanGraphValidator.validate(beans, functions, plugin, pluginTypes)
+        val problems = BeanGraphValidator.validate(beans, functions, plugin, subclasses.mapNotNull { it.clazz }.distinct(), pluginTypes)
         problems.forEach { environment.logger.error(it.message, it.node) }
-        val failed = enhancements.hadErrors || attributes.hadErrors || beanCollector.hadErrors || functionCollector.hadErrors
+        val failed = enhancements.hadErrors || attributes.hadErrors || pluginCollector.hadErrors || beanCollector.hadErrors ||
+            functionCollector.hadErrors || subclassCollector.hadErrors
         if (failed || problems.isNotEmpty()) return emptyList()
 
         val model = DescriptorModel(
@@ -48,6 +53,7 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
             beans = beans.sortedBy { it.type.canonicalName },
             functions = functions.sortedWith(compareBy({ it.owner.canonicalName }, { it.name })),
             plugin = plugin,
+            subclasses = subclasses,
         )
         DescriptorGenerator.generate(model)
             .writeTo(environment.codeGenerator, Dependencies(aggregating = true, *files.toTypedArray()))

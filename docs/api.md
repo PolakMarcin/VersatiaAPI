@@ -18,7 +18,7 @@ that deliver no feature of their own but are needed for the framework to work.
 
 | Package                  | Contents                                                                  |
 |--------------------------|---------------------------------------------------------------------------|
-| `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `EnhancementProcessor`, `EnhancementContext`, `StateStore`, `EventType`, `LifecycleEvent`, `EnhancementException`) and the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`) |
+| `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `@VersatiaSubclassEnhancement`, `EnhancementProcessor`, `EnhancementContext`, `StateStore`, `EventType`, `LifecycleEvent`, `EnhancementException`, `@VersatiaDisabler`) and the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`, `@DisableVersatiaFeatures`) |
 | `engine.descriptor`      | Model of the generated descriptor: `VersatiaPluginDescriptor`, `EnhancedElement`, `AnnotationOccurrence`, `ClassTarget`, `FunctionTarget`, `PluginTarget`, `Parameter`, `Instantiator`, `Invoker`, `DescriptorVersion` |
 | `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@PluginBean`; `@Qualifier`, `@Primary`; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
 | `lifecycle`              | `@AutoInvoke`, functions called at a lifecycle phase; `LifecycleProcessors` |

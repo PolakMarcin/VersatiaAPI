@@ -44,6 +44,13 @@ class DescriptorGeneratorTest {
     private fun qualified(type: ClassName, name: String) = ParameterDeclaration(type, listOf(AnnotationRef(QUALIFIER, mapOf("value" to name))))
 
     @Test
+    fun `records where the producing annotation was written`() {
+        val code = DescriptorGenerator.generate(DescriptorModel("com.example", listOf(bean(ClassName("com.example", "Clock"))))).toString()
+
+        assertContains(code, "origin = \"com.example.Clock\"")
+    }
+
+    @Test
     fun `generates an empty descriptor`() {
         val code = DescriptorGenerator.generate(DescriptorModel("com.example", emptyList())).toString()
 
@@ -209,5 +216,32 @@ class DescriptorGeneratorTest {
         val file = DescriptorGenerator.generate(DescriptorModel("com.example.alpha", emptyList()))
         assertEquals("com.example.alpha", file.packageName)
         assertEquals("VersatiaDescriptor", file.name)
+    }
+
+    @Test
+    fun `emits subclass elements with their origin`() {
+        val plugin = PluginDeclaration(
+            type = ClassName("com.example", "MyPlugin"),
+            primary = false,
+            annotations = emptyList(),
+            assignableTypes = listOf(ClassName("com.example", "MyPlugin")),
+        )
+        val audit = AnnotationRef(ClassName("com.example", "AuditSubclasses"))
+        val enhancement = Enhancement("com.example.AuditEnhancementProcessor", EventType.PLUGIN_START_ONLY)
+        val origin = ClassName("com.example", "AuditedPlugin")
+        val subclasses = listOf(
+            SubclassElement(origin, audit, enhancement, null),
+            SubclassElement(origin, audit, enhancement, ClassDeclaration(ClassName("com.example", "Ledger"), emptyList(), listOf(ParameterDeclaration(ClassName("com.example", "Clock"))), listOf(ClassName("com.example", "Ledger")), reachable = true)),
+            SubclassElement(origin, audit, enhancement, ClassDeclaration(ClassName("com.example", "Console"), emptyList(), emptyList(), listOf(ClassName("com.example", "Console")), reachable = true, isObject = true)),
+            SubclassElement(origin, audit, enhancement, ClassDeclaration(ClassName("com.example", "Vault"), emptyList(), emptyList(), listOf(ClassName("com.example", "Vault")), reachable = false, isObject = true)),
+        )
+
+        val code = DescriptorGenerator.generate(DescriptorModel("com.example", emptyList(), plugin = plugin, subclasses = subclasses)).toString()
+
+        assertEquals(4, code.split("origin = \"com.example.AuditedPlugin\"").size - 1)
+        assertContains(code, "target = PluginTarget(")
+        assertContains(code, "instantiator = Instantiator.Direct { args -> Ledger(args[0] as Clock) }")
+        assertContains(code, "instantiator = Instantiator.Direct { _ -> Console }")
+        assertContains(code, "instantiator = Instantiator.ObjectInstance(\"com.example.Vault\")")
     }
 }
