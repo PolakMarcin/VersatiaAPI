@@ -449,6 +449,19 @@ The `ksp.SubclassCollector` applies the rules `PluginCollector` found; it knows 
 matched by a subclass enhancement that is also a bean produces both elements, so a processor that
 needs the instance should ask the `BeanResolver` first and instantiate only when there is no bean.
 
+## Event listeners
+
+`@RegisterListeners` (`event`), declared on `VersatiaPlugin`, is a subclass enhancement for
+Bukkit's `Listener`: every class of the plugin implementing it is recorded as an element for
+`RegisterListenersEnhancementProcessor` (`EventProcessors.REGISTER_LISTENERS`) at
+`PLUGIN_START_ONLY`, with `VersatiaPlugin` as the origin. A listener that is a bean is registered
+with its bean instance; a plain listener class is created like a bean, with its constructor
+parameters injected through the `BeanResolver`, but is not put into the container; objects and the
+main class are registered as themselves. The generator lists subclass elements before function
+elements, so listeners are registered before `@AutoInvoke` start functions run. Bukkit
+unregisters the listeners when the plugin is disabled. `@DisableVersatiaFeatures(registerListeners = true)`
+switches the feature off.
+
 ## Plugin resources
 
 `@ExtractResources` (`resources`), declared on `VersatiaPlugin`, copies every file under the

@@ -23,6 +23,7 @@ that deliver no feature of their own but are needed for the framework to work.
 | `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@PluginBean`; `@Qualifier`, `@Primary`; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
 | `lifecycle`              | `@AutoInvoke`, functions called at a lifecycle phase; `LifecycleProcessors` |
 | `resources`              | `@ExtractResources`, files shipped in the JAR extracted to the data folder; `ResourceProcessors` |
+| `event`                  | `@RegisterListeners`, Bukkit listeners registered at start; `EventProcessors` |
 | `util.*`                 | Independent helpers, described below                                      |
 
 The framework packages are documented in [enhancements.md](enhancements.md). All helpers live

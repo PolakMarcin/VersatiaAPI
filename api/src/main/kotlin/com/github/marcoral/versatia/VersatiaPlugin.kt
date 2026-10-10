@@ -1,6 +1,7 @@
 package com.github.marcoral.versatia
 
 import com.github.marcoral.versatia.di.PluginBean
+import com.github.marcoral.versatia.event.RegisterListeners
 import com.github.marcoral.versatia.resources.ExtractResources
 import org.bukkit.plugin.java.JavaPlugin
 
@@ -11,6 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin
  */
 @PluginBean
 @ExtractResources
+@RegisterListeners
 abstract class VersatiaPlugin : JavaPlugin() {
     final override fun onEnable() {
         val engine = server.servicesManager.load(VersatiaEngine::class.java)

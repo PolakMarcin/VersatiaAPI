@@ -67,11 +67,11 @@ internal object DescriptorGenerator {
     private fun elements(model: DescriptorModel) = listOf(
         model.plugin?.let(::pluginElements).orEmpty(),
         model.beans.flatMap { bean -> bean.enhancements.map { element(it, bean.scope, classTarget(bean.asClass()), bean.type) } },
-        model.functions.flatMap { function -> function.enhancements.map { element(it, function.annotation, functionTarget(function), function.owner) } },
         model.subclasses.map { subclass ->
             val target = subclass.clazz?.let(::classTarget) ?: pluginTarget(model.plugin!!)
             element(subclass.enhancement, subclass.annotation, target, subclass.origin)
         },
+        model.functions.flatMap { function -> function.enhancements.map { element(it, function.annotation, functionTarget(function), function.owner) } },
     ).flatten().let { elements ->
         if (elements.isEmpty()) CodeBlock.of("emptyList()")
         else CodeBlock.builder().add("listOf(\n⇥").apply { elements.forEach { add("%L,\n", it) } }.add("⇤)").build()

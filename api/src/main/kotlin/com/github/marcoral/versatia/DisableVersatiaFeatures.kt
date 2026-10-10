@@ -1,5 +1,6 @@
 package com.github.marcoral.versatia
 
+import com.github.marcoral.versatia.event.RegisterListeners
 import com.github.marcoral.versatia.resources.ExtractResources
 import kotlin.reflect.KClass
 
@@ -23,4 +24,6 @@ annotation class VersatiaDisabler(val enhancement: KClass<out Annotation>)
 annotation class DisableVersatiaFeatures(
     /** Leaves the files under `resources/` in the JAR; see `@ExtractResources`. */
     @VersatiaDisabler(ExtractResources::class) val extractResources: Boolean = false,
+    /** Leaves the plugin's `Listener`s unregistered; see `@RegisterListeners`. */
+    @VersatiaDisabler(RegisterListeners::class) val registerListeners: Boolean = false,
 )

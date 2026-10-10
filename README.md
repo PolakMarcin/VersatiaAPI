@@ -9,7 +9,8 @@ modules:
 - `api` – the public API that the framework runtime (VersatiaCore, a separate repository)
   implements, syntax sugar over Paper, and the annotations plugins use to declare enhancements;
   today dependency injection (`@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@Qualifier`,
-  `@Primary`), lifecycle hooks (`@AutoInvoke`) and resource extraction (`@ExtractResources`),
+  `@Primary`), lifecycle hooks (`@AutoInvoke`), resource extraction (`@ExtractResources`) and
+  listener registration (`@RegisterListeners`),
 - `ksp` – the compile-time step: a Kotlin Symbol Processing processor that analyses a plugin's
   sources, validates them and generates the descriptor the runtime interprets.
 
@@ -80,7 +81,7 @@ See [docs/build.md](docs/build.md) for how this is set up.
 - `api/src/main/kotlin/` – library sources under `com.github.marcoral.versatia`, organised by
   feature: the root package (enhancement mechanism, `VersatiaPlugin`, `VersatiaEngine`),
   `engine.descriptor` (model of the generated descriptor), `di` (bean scopes), `lifecycle`
-  (`@AutoInvoke`), `resources` (`@ExtractResources`), `util.*` (helpers, see [docs/api.md](docs/api.md))
+  (`@AutoInvoke`), `resources` (`@ExtractResources`), `event` (`@RegisterListeners`), `util.*` (helpers, see [docs/api.md](docs/api.md))
 - `api/src/test/kotlin/` – unit tests of the helpers
 - `ksp/src/main/kotlin/` – the KSP processor and the descriptor generator, with `ksp.di` and
   `ksp.lifecycle` for the feature-specific collectors and checks
