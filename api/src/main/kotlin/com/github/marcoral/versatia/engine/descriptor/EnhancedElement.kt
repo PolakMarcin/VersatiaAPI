@@ -79,4 +79,6 @@ data class FunctionTarget(
     val annotations: List<AnnotationOccurrence>,
     val parameters: List<Parameter>,
     val invoker: Invoker,
+    /** The attributes written on the declaring class; what applies to a whole class is read from here. */
+    val classAnnotations: List<AnnotationOccurrence> = emptyList(),
 ) : ElementTarget

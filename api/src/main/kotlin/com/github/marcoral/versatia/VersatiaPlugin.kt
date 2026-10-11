@@ -14,14 +14,11 @@ import org.bukkit.plugin.java.JavaPlugin
 @ExtractResources
 @RegisterListeners
 abstract class VersatiaPlugin : JavaPlugin() {
-    final override fun onEnable() {
-        val engine = server.servicesManager.load(VersatiaEngine::class.java)
-            ?: error("VersatiaCore is not running. Add it to `depend:` in plugin.yml.")
-        engine.enhance(this)
-    }
+    /** Runs this plugin's reload-phase enhancements, as `/versatia reload <name>` does. */
+    fun versatiaReload() = VersatiaEngine.instance.reload(this)
 
-    final override fun onDisable() {
-        // Dependents are disabled before their dependencies, so the engine is still registered
-        server.servicesManager.load(VersatiaEngine::class.java)?.disable(this)
-    }
+    final override fun onEnable() = VersatiaEngine.instance.enhance(this)
+
+    // Dependents are disabled before their dependencies, so the engine is still registered
+    final override fun onDisable() = VersatiaEngine.instance.disable(this)
 }

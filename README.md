@@ -9,8 +9,9 @@ modules:
 - `api` – the public API that the framework runtime (VersatiaCore, a separate repository)
   implements, syntax sugar over Paper, and the annotations plugins use to declare enhancements;
   today dependency injection (`@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@Qualifier`,
-  `@Primary`), lifecycle hooks (`@AutoInvoke`), resource extraction (`@ExtractResources`) and
-  listener registration (`@RegisterListeners`),
+  `@Primary`), lifecycle hooks (`@AutoInvoke`), resource extraction (`@ExtractResources`),
+  listener registration (`@RegisterListeners`), optional integrations (`@ConditionalOnPlugin`)
+  and friendly plugin names (`@FriendlyName`, read back through `PluginRegistry`),
 - `ksp` – the compile-time step: a Kotlin Symbol Processing processor that analyses a plugin's
   sources, validates them and generates the descriptor the runtime interprets.
 

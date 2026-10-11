@@ -125,6 +125,7 @@ internal object DescriptorGenerator {
         .add("owner = %T.%L,\n", functionOwner, function.ownerKind.name)
         .add("annotations = %L,\n", occurrences(function.annotations))
         .add("parameters = %L,\n", parameters(function.parameters))
+        .add("classAnnotations = %L,\n", occurrences(function.classAnnotations))
         .add("invoker = %L,\n", invoker(function))
         .add("⇤)")
         .build()

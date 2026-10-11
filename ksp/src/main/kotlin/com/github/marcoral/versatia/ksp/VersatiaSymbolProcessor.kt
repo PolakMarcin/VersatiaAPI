@@ -40,12 +40,14 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
         val functions = functionCollector.collect(files)
         val subclassCollector = SubclassCollector(environment.logger, mainClass, attributes)
         val subclasses = subclassCollector.collect(files, plugin.enhancements)
+        val placement = AttributePlacement(environment.logger, enhancements)
+        placement.validate(files, mainClass, (beans.map { it.type } + subclasses.mapNotNull { it.clazz?.type }).map { it.canonicalName }.toSet())
 
         val pluginTypes = resolver.getClassDeclarationByName(VERSATIA_PLUGIN)?.assignableTypes()?.toSet().orEmpty()
         val problems = BeanGraphValidator.validate(beans, functions, plugin, subclasses.mapNotNull { it.clazz }.distinct(), pluginTypes)
         problems.forEach { environment.logger.error(it.message, it.node) }
         val failed = enhancements.hadErrors || attributes.hadErrors || pluginCollector.hadErrors || beanCollector.hadErrors ||
-            functionCollector.hadErrors || subclassCollector.hadErrors
+            functionCollector.hadErrors || subclassCollector.hadErrors || placement.hadErrors
         if (failed || problems.isNotEmpty()) return emptyList()
 
         val model = DescriptorModel(

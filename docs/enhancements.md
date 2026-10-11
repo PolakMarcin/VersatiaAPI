@@ -75,7 +75,8 @@ The descriptor records facts about the annotated code, never what a feature make
 attributes on it) and an `Instantiator`. A `FunctionTarget` has the declaring class (Kotlin and JVM
 names), the function name, who holds the instance (`FunctionOwner`: `PLUGIN`, `OBJECT` or
 `INSTANCE` for a class whose instance the processor must obtain), the attributes on the function,
-its parameters and an `Invoker`. A `PluginTarget` describes the main class: name, assignable types
+its parameters, an `Invoker` and the attributes on the declaring class (`classAnnotations`, for
+what applies to a whole class). A `PluginTarget` describes the main class: name, assignable types
 and attributes, nothing to construct. Bean names, `@Primary` and qualifiers are not fields: the DI
 processor derives them from the recorded attributes.
 
@@ -143,7 +144,7 @@ the sources, otherwise at the class using it.
 | `EventType`              | Runs at                          |
 |--------------------------|----------------------------------|
 | `PLUGIN_START_ONLY`      | plugin enable                    |
-| `PLUGIN_RELOAD_ONLY`     | Versatia reload                  |
+| `PLUGIN_RELOAD_ONLY`     | `/versatia reload`, `VersatiaEngine.reload` |
 | `PLUGIN_RELOAD_OR_START` | both of the above                |
 | `PLUGIN_STOP`            | plugin disable                   |
 
@@ -366,7 +367,9 @@ generates nothing when any of them fires:
 - a scope annotation that inherits `@Bean` but no `@VersatiaEnhancement`, or one that sends a
   bean processor anything but `PLUGIN_START_ONLY`;
 - a `@VersatiaEnhancement` without `processorClass` or whose phase is not declared exactly once
-  (see [Phases](#phases)).
+  (see [Phases](#phases));
+- `@FriendlyName` off the main class or not one word, and `@ConditionalOnPlugin` where it would
+  have no effect (see [Conditional elements](#conditional-elements)).
 
 A dependency that no local bean provides is **not** an error: it is expected to come from a bean
 exposed by a plugin loaded earlier, and the runtime reports it if it does not.
@@ -473,6 +476,31 @@ created, so a bean may read the files in its constructor. The directory name is 
 (`ExtractResources.DIRECTORY`); other files in `src/main/resources`, such as `plugin.yml`, stay in
 the JAR. The processor is `ExtractResourcesEnhancementProcessor` (`ResourceProcessors.EXTRACT`) in
 VersatiaCore.
+
+## Friendly names
+
+`@FriendlyName("shop")` (root package) is an attribute for the main class: the runtime registers
+the plugin under that name instead of the `name:` of `plugin.yml`, and `/versatia reload <name>`
+addresses it so. The descriptor records it on the `PluginTarget` like any attribute; the runtime
+reads it from there when the plugin starts. `AttributePlacement` rejects it on any other class and
+a name that is not one word. `VersatiaPlugin.versatiaReload()` runs the plugin's own reload event
+through the engine, so plugin code never looks the service up itself; where the engine is needed
+directly, `VersatiaEngine.instance` (`getInstance()` from Java) is the one lookup. `PluginRegistry` (root
+package) is the read side: the running plugins
+by friendly name, `friendlyNames`, `friendlyNameOf(plugin)` and `get(name)`; VersatiaCore
+implements it, returns it from `VersatiaEngine.registry` and exposes it as a singleton bean.
+
+## Conditional elements
+
+`@ConditionalOnPlugin("Vault")` (root package) is an attribute on a bean or listener class, on an
+`object` or class declaring enhanced functions, or on an enhanced function. The runtime dispatches
+the element only while every named plugin is enabled; a function element carries the attributes of
+its declaring class in `classAnnotations`, so the condition on a class or object covers its
+functions. The class behind a skipped element is never loaded, so it may reference the optional
+plugin's classes freely. `AttributePlacement` rejects the attribute on the main class, on a class
+that is neither an element nor declares an enhanced function, on a function without an
+enhancement, and with no plugin named. `VersatiaEngine.reload(plugin)` is the
+third operation of the engine, next to `enhance` and `disable`.
 
 ## Setting up a plugin build
 

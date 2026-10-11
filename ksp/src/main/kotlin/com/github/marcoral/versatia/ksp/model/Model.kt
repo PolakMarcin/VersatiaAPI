@@ -63,6 +63,8 @@ internal data class FunctionDeclaration(
     /** True when generated code in the plugin's package can call the function directly. */
     val reachable: Boolean,
     val node: KSNode? = null,
+    /** The attributes written on the declaring class. */
+    val classAnnotations: List<AnnotationRef> = emptyList(),
 )
 
 internal data class DescriptorModel(

@@ -77,6 +77,7 @@ internal class FunctionCollector(
             parameters = parameters.map { it.recorded },
             reachable = clazz.isReachable() && function.isReachable() && parameters.allReachable(),
             node = function,
+            classAnnotations = attributes.of(clazz, function),
         )
     }
 

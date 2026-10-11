@@ -1021,6 +1021,105 @@ import com.github.marcoral.versatia.di.PluginBean
     }
 
     @Test
+    fun `records FriendlyName and ConditionalOnPlugin as attributes`() {
+        val result = compile(
+            SourceFile.kotlin(
+                "Plugin.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.ConditionalOnPlugin
+                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.FriendlyName
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.di.LocalBean
+                import com.github.marcoral.versatia.lifecycle.AutoInvoke
+
+                @FriendlyName("shop")
+                class AlphaPlugin : VersatiaPlugin()
+
+                @ConditionalOnPlugin("Vault")
+                @LocalBean
+                class Bridge {
+                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    fun connect() {}
+                }
+
+                @ConditionalOnPlugin("CommandAPI", "Vault")
+                object Hooks {
+                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    fun hook() {}
+
+                    @ConditionalOnPlugin("Essentials")
+                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    fun chat() {}
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        val elements = result.descriptor().elements
+        val plugin = assertIs<PluginTarget>(elements.first().target)
+        assertEquals(listOf(AnnotationOccurrence("com.github.marcoral.versatia.FriendlyName", mapOf("value" to "shop"))), plugin.annotations)
+        val conditional = "com.github.marcoral.versatia.ConditionalOnPlugin"
+        val onVault = AnnotationOccurrence(conditional, mapOf("value" to listOf("Vault")))
+        val onBoth = AnnotationOccurrence(conditional, mapOf("value" to listOf("CommandAPI", "Vault")))
+        assertEquals(listOf(onVault), result.descriptor().classTargets().getValue("com.example.alpha.Bridge").annotations)
+        val functions = elements.map { it.target }.filterIsInstance<FunctionTarget>().associateBy { it.functionName }
+        assertEquals(emptyList(), functions.getValue("connect").annotations)
+        assertEquals(listOf(onVault), functions.getValue("connect").classAnnotations, "the bean's attributes travel with its functions")
+        assertEquals(listOf(onBoth), functions.getValue("hook").classAnnotations, "the object's attributes travel with its functions")
+        assertEquals(listOf(AnnotationOccurrence(conditional, mapOf("value" to listOf("Essentials")))), functions.getValue("chat").annotations)
+        assertEquals(listOf(onBoth), functions.getValue("chat").classAnnotations)
+    }
+
+    @Test
+    fun `rejects FriendlyName and ConditionalOnPlugin where they have no effect`() {
+        val result = compile(
+            SourceFile.kotlin(
+                "Plugin.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.ConditionalOnPlugin
+                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.FriendlyName
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.di.LocalBean
+                import com.github.marcoral.versatia.lifecycle.AutoInvoke
+
+                @FriendlyName("two words") @ConditionalOnPlugin("Vault")
+                class AlphaPlugin : VersatiaPlugin()
+
+                @FriendlyName("config") @LocalBean
+                class Config
+
+                @ConditionalOnPlugin("Vault")
+                object Tools {
+                    @ConditionalOnPlugin("Vault")
+                    fun plain() {}
+                }
+
+                @ConditionalOnPlugin() @LocalBean
+                class Bridge
+                """,
+            ),
+            mainClass = null,
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode)
+        assertContains(result.messages, "@FriendlyName on AlphaPlugin must be one word without spaces")
+        assertContains(result.messages, "@ConditionalOnPlugin cannot apply to AlphaPlugin, the plugin's main class")
+        assertContains(result.messages, "@FriendlyName on Config has no effect: it belongs on the plugin's main class")
+        assertContains(result.messages, "@ConditionalOnPlugin on Tools has no effect: Tools is not enhanced and declares no enhanced function")
+        assertContains(result.messages, "@ConditionalOnPlugin on Tools.plain() has no effect: the function is not enhanced")
+        assertContains(result.messages, "@ConditionalOnPlugin on Bridge must name plugins, one word each")
+        assertTrue(result.sourcesGeneratedBySymbolProcessor.none(), "no descriptor must be generated")
+    }
+
+    @Test
     fun `prototypes take the consuming plugin only as a type every plugin has`() {
         val result = compile(
             SourceFile.kotlin(
@@ -1054,4 +1153,3 @@ import com.github.marcoral.versatia.di.PluginBean
         assertFalse(result.messages.contains("Shared is a prototype"), "singletons keep the owner's instance")
     }
 }
-
