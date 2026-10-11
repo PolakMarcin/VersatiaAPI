@@ -179,7 +179,7 @@ Four annotations in `com.github.marcoral.versatia.di`:
 | `@Bean`             | annotation class | marks an annotation as a bean *scope*; never applied to a class       |
 | `@LocalBean`        | class            | injectable only inside the plugin that declares it                   |
 | `@ExposeSingleton`  | class            | one instance, shared with every plugin loaded afterwards             |
-| `@ExposePrototype`  | class            | a fresh instance for each later plugin that depends on it; a plugin-typed parameter receives that plugin |
+| `@ExposePrototype`  | class            | a fresh instance for each later plugin that depends on it; a plugin-typed parameter receives that plugin, a prototype-typed one the instance made for it |
 
 Each scope inherits `@Bean` and names its processor: `LocalBeanEnhancementProcessor`,
 `ExposeSingletonEnhancementProcessor`, `ExposePrototypeEnhancementProcessor` in
@@ -194,6 +194,30 @@ class. The DI processors publish it in the plugin state under `BeanResolver.KEY`
 
 Beans use constructor injection only. A dependency is matched against the *assignable types* of
 the candidate beans, so a parameter may be typed by an interface the bean implements.
+
+### Reloadable beans
+
+A bean implementing `Reloadable` (`di`) has its `reload()` called by the runtime right after the
+instance is created and again at every `RELOAD` event of the plugin the instance belongs to: a
+local bean belongs to its plugin, a prototype instance to the plugin it was made for, an exposed
+singleton to its owner only. Beans are reloaded in creation order, so a dependency is fresh before
+its dependents, and before any `@AutoInvoke` function of the event runs. A bean whose state comes
+from files therefore reads them in `reload()` rather than in its constructor, and nothing else is
+needed for `/versatia reload` to pick up changes:
+
+```kotlin
+@LocalBean
+class Prices(private val plugin: JavaPlugin) : Reloadable {
+    private var prices = emptyMap<String, Int>()
+
+    override fun reload() {
+        prices = loadYamlOrThrow(plugin.dataFolder.resolve("prices.yml")).getValues(false).mapValues { it.value as Int }
+    }
+}
+```
+
+A `reload()` that throws fails the event with `Plugin X: com.example.Prices failed to reload`,
+with the original exception as cause; at start that prevents the plugin from enabling.
 
 ### The plugin itself
 
@@ -217,9 +241,12 @@ Its bean name is always `plugin` (`BeanNames.PLUGIN`), whatever the class is cal
 a scope annotation (`MyPlugin is the plugin's main class and a local bean already; remove
 @LocalBean`), since the runtime must never construct a second plugin instance. The descriptor
 records the main class as a `PluginTarget` sent to `PluginBeanEnhancementProcessor`
-(`BeanProcessors.PLUGIN`), which declares it in the same session as the scopes do. A main class
-that extends `JavaPlugin` directly is a bean only if it carries `@PluginBean` itself; without it the
-name `plugin` is free.
+(`BeanProcessors.PLUGIN`), which declares it in the same session as the scopes do. Unlike the
+scopes, `@PluginBean` runs at `PLUGIN_RELOAD_OR_START`: the element anchors the plugin's bean
+container in its lifecycle, and at a reload the processor reloads the session's
+[`Reloadable` beans](#reloadable-beans) instead of declaring anything. A main class that extends
+`JavaPlugin` directly is a bean only if it carries `@PluginBean` itself; without it the name
+`plugin` is free.
 
 ### Names, `@Qualifier` and `@Primary`
 
