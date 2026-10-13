@@ -2,7 +2,7 @@ package com.github.marcoral.versatia.ksp.di
 
 import com.github.marcoral.versatia.EventType
 import com.github.marcoral.versatia.di.BeanProcessors
-import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
+import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.ksp.model.AnnotationRef
 import com.github.marcoral.versatia.ksp.model.EnhancedAnnotation
 import com.github.marcoral.versatia.ksp.model.Enhancement
@@ -45,7 +45,7 @@ class BeanGraphValidatorTest {
 
     private fun function(vararg parameters: ParameterDeclaration) = FunctionDeclaration(
         owner = type("Main"),
-        ownerKind = FunctionOwner.PLUGIN,
+        ownerKind = MemberOwner.PLUGIN,
         name = "start",
         annotation = AnnotationRef(ClassName("com.github.marcoral.versatia.lifecycle", "AutoInvoke")),
         enhancements = listOf(Enhancement("com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor", EventType.PLUGIN_START_ONLY)),

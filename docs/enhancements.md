@@ -14,8 +14,8 @@ lives in VersatiaCore and is documented there (`docs/runtime.md`).
   the enhancement gives and calls with every recorded occurrence. Processors live in VersatiaCore,
   or in any plugin that the enhanced plugin depends on.
 - **Attribute**: an annotation marked `@VersatiaAttribute` (root package). Wherever it appears on
-  an enhanced class, its constructor parameters, an enhanced function or its parameters, the
-  descriptor records it together with its arguments, so processors can read it. `@Qualifier` and
+  an enhanced class, its constructor parameters, an enhanced function or its parameters, or an
+  enhanced property, the descriptor records it together with its arguments, so processors can read it. `@Qualifier` and
   `@Primary` are attributes.
 - **Annotation inheritance**: an annotation class annotated with another annotation *inherits* it.
   The relation is transitive. When `@ExposePrototype` is annotated with `@Bean`, every class marked
@@ -73,10 +73,12 @@ The descriptor records facts about the annotated code, never what a feature make
 `ClassTarget` has the class name, its `assignableTypes` (itself plus every supertype except
 `Any`), the attributes on the class, the constructor parameters (each a `Parameter`: type plus the
 attributes on it) and an `Instantiator`. A `FunctionTarget` has the declaring class (Kotlin and JVM
-names), the function name, who holds the instance (`FunctionOwner`: `PLUGIN`, `OBJECT` or
+names), the function name, who holds the instance (`MemberOwner`: `PLUGIN`, `OBJECT` or
 `INSTANCE` for a class whose instance the processor must obtain), the attributes on the function,
 its parameters, an `Invoker` and the attributes on the declaring class (`classAnnotations`, for
-what applies to a whole class). A `PluginTarget` describes the main class: name, assignable types
+what applies to a whole class). A `PropertyTarget` has the same owner facts for a mutable
+property, its type as a `TypeReference` (qualified name, type arguments, nullability) and a
+`Setter`. A `PluginTarget` describes the main class: name, assignable types
 and attributes, nothing to construct. Bean names, `@Primary` and qualifiers are not fields: the DI
 processor derives them from the recorded attributes.
 
@@ -91,7 +93,7 @@ walk it. Changing how VersatiaCore iterates therefore never requires regeneratin
 ### Format version
 
 The format has its own `major.minor` version (`VersatiaPluginDescriptor.FORMAT_VERSION`, currently
-`1.0`), independent of the library version. A runtime accepts exactly the version it was built
+`1.1`), independent of the library version. A runtime accepts exactly the version it was built
 with and rejects any other with a message naming the plugin, both versions and the fix. The
 generator writes the two numbers as literal `Int` properties (`formatMajor`, `formatMinor`), so a
 runtime can read them from any descriptor before deciding what to do with it; for the same reason
@@ -106,9 +108,12 @@ Encapsulation is preserved: beans, their constructors, functions and their param
 - **`Instantiator.Direct` / `Invoker.Direct`** when the class, the member and every parameter type
   are `public` or `internal`. The generated code contains the call itself:
   `Instantiator.Direct { args -> Spy(args[0] as Secret) }`. No reflection, no `setAccessible`.
-- **`Instantiator.Reflective` / `Invoker.Reflective`** otherwise. They store JVM binary names
+- **`Instantiator.Reflective` / `Invoker.Reflective` / `Setter.Reflective`** otherwise. They store JVM binary names
   (`com.example.Outer$Hidden`) and at runtime load the class **without initialising it**
   (`Class.forName(name, false, loader)`), find the matching declared member and make it accessible.
+  A property whose setter is `private` or `protected` is reflective even when the property is visible;
+  a direct setter of a generic property casts unchecked, so the generated object carries
+  `@Suppress("UNCHECKED_CAST")` when one exists.
 - A Kotlin `object` enhanced through a subclass enhancement gets `Instantiator.Direct { _ -> Console }`
   when it is reachable and `Instantiator.ObjectInstance(binaryName)`, which reads its `INSTANCE`
   field, otherwise.
@@ -197,26 +202,31 @@ the candidate beans, so a parameter may be typed by an interface the bean implem
 
 ### Reloadable beans
 
-A bean implementing `Reloadable` (`di`) has its `reload()` called by the runtime right after the
-instance is created and again at every `RELOAD` event of the plugin the instance belongs to: a
-local bean belongs to its plugin, a prototype instance to the plugin it was made for, an exposed
-singleton to its owner only. Beans are reloaded in creation order, so a dependency is fresh before
-its dependents, and before any `@AutoInvoke` function of the event runs. A bean whose state comes
-from files therefore reads them in `reload()` rather than in its constructor, and nothing else is
-needed for `/versatia reload` to pick up changes:
+A bean implementing `Reloadable` (`di`) has its `reload()` called by the runtime once the beans
+of the plugin the instance belongs to exist and that plugin's `@Value` properties are set, and
+again at every `RELOAD` event of that plugin: a local bean belongs to its plugin, a prototype
+instance to the plugin it was made for, an exposed singleton to its owner only. Beans are
+reloaded in creation order, so a dependency is fresh before its dependents, and before any
+`@AutoInvoke` function of the event runs; an instance obtained after that first pass is reloaded
+as soon as it is obtained. Values go first because a `reload()` may depend on one and a value
+depends on nothing; the consequence is that the first `reload()` does not happen inside the
+bean's creation, so a dependent's constructor sees the bean unloaded, as the documentation site
+explains under "The order within an event". The hook exists for the prototypes of modules, which read the
+consuming plugin's files and have no other way to follow its reloads; a plugin's own
+configuration is `@Value` properties (see [Configuration values](#configuration-values)):
 
 ```kotlin
-@LocalBean
-class Prices(private val plugin: JavaPlugin) : Reloadable {
-    private var prices = emptyMap<String, Int>()
+@ExposePrototype
+internal class MessagesImpl(private val plugin: Plugin) : Messages, Reloadable {
+    private var bank = emptyMap<String, Message>()
 
     override fun reload() {
-        prices = loadYamlOrThrow(plugin.dataFolder.resolve("prices.yml")).getValues(false).mapValues { it.value as Int }
+        bank = MessageLoader.load(plugin)
     }
 }
 ```
 
-A `reload()` that throws fails the event with `Plugin X: com.example.Prices failed to reload`,
+A `reload()` that throws fails the event with `Plugin X: com.example.MessagesImpl failed to reload`,
 with the original exception as cause; at start that prevents the plugin from enabling.
 
 ### The plugin itself
@@ -315,7 +325,7 @@ Generated for it (shortened):
 ```kotlin
 object VersatiaDescriptor : VersatiaPluginDescriptor {
   override val formatMajor: Int = 1
-  override val formatMinor: Int = 0
+  override val formatMinor: Int = 1
 
   override val elements: List<EnhancedElement>
     get() = listOf(
@@ -391,6 +401,10 @@ generates nothing when any of them fires:
   same enhancement;
 - a class matched by a subclass enhancement that is inner, generic or has more than one
   constructor, or whose constructor parameters are not injectable;
+- an enhanced property that is a `val`, an extension or abstract property, top-level, or declared
+  in a class that is neither the main class, an object nor a bean; a `@Value` property whose type
+  is not in `ValueTypes` and has no mapper, or whose mapper cannot be created or maps to a type the
+  property cannot hold, or a nullable `PreviousValueTracking` (see [Configuration values](#configuration-values));
 - a scope annotation that inherits `@Bean` but no `@VersatiaEnhancement`, or one that sends a
   bean processor anything but `PLUGIN_START_ONLY`;
 - a `@VersatiaEnhancement` without `processorClass` or whose phase is not declared exactly once
@@ -431,6 +445,60 @@ the parameters and the invoker; `INSTANCE` means a bean, and `AutoInvokeEnhancem
 fetches it through the plugin's `BeanResolver`. Functions run after every other processor of the event, in descriptor
 order (class name, then function name), and a plugin's beans stay available for its whole
 lifetime, so reload- and stop-phase functions can use them too.
+
+## Configuration values
+
+`@Value(key, file = "config.yml", mapper = NoMapper::class)` (`com.github.marcoral.versatia.config`)
+marks a mutable property the runtime sets from a YAML file of the plugin's data folder at
+`PLUGIN_RELOAD_OR_START`:
+
+```kotlin
+@LocalBean
+class Shop {
+    @Value("shop.tax")
+    var tax = Percent.of(0.0)
+
+    @Value("max-players", file = "limits.yml")
+    private var maxPlayers = 0
+
+    @Value("shop.restock-seconds", mapper = TicksFromSeconds::class)
+    var restockTicks = 0L
+}
+```
+
+- The property may belong to the plugin's main class, to a Kotlin `object`, or to a bean, like an
+  auto-invoked function, and must be a `var`; a `val`, a top-level property or one of a plain
+  class is a compile error. `config.PropertyCollector` applies the rules; it is generic over
+  enhancements on properties, with the type check being the one `@Value`-specific part.
+- Without a mapper the type must be one of `ValueTypes` (`config`): the scalars read by the strict
+  getters (`Boolean`, `Int`, `Long`, `Float`, `Double`, `UInt`, `ULong`, `String`, `Percent`), any
+  enum, the Bukkit types with their own deserialisation (`Color`, `Location`, `OfflinePlayer`,
+  `Vector`, `ItemStack`, `ConfigurationSection`), `List` or `Set` of a scalar or enum, `Map` from
+  `String` to one, and any of them nullable, which makes the value optional. The API lists them
+  by name because the compile-time step has no Paper API on its classpath.
+- With a mapper the property may have any type: a `ValueMapper<T>` (`config`) is an `object` or a
+  class with a no-argument constructor whose `map(section, key)` reads the value with the strict
+  getters and returns `T`; the compile-time step checks that the property can hold `T`. `NoMapper`
+  is the annotation's default, since annotations cannot hold `null`. `ksp.config.ValueTypeCheck`
+  does both checks and names the supported types in its messages.
+- There is no default in the annotation: the shipped file holds the defaults, and a missing
+  non-nullable value is a runtime error that names the property, the file and the key; a mapper
+  is not called for a missing key.
+- A `val` of type `PreviousValueTracking<T>` (`config`) is accepted too: the runtime stores into
+  the cell's `value` instead of assigning the property, and the cell keeps `previous`, `hasPrevious`
+  and `changed` for code that reacts to a change at a reload. The descriptor records the declared
+  type, `PreviousValueTracking<kotlin.Int>`, and a setter that stores into the cell: direct
+  (`Limits.max.value = value as Int`) or `Setter.Reflective(owner, "max", "value")`, which reads
+  the property and sets the named member of what it holds. The compile-time check applies to `T`;
+  the cell itself must not be nullable.
+- The element is a `PropertyTarget` with the owner kind, the `TypeReference` and a `Setter`,
+  direct (`Setter.Direct { instance, value -> (instance as Shop).tax = value as Percent }`) or
+  reflective; the mapper is recorded as the annotation's `mapper` argument, by class name.
+  `ValueEnhancementProcessor` (`ConfigProcessors.VALUE`) works in `process` itself, so the values
+  are set before the reloadable beans reload and before the functions run; the generator lists
+  property elements after the bean elements, so the beans are declared by then. `Setter.Reflective`
+  sets through `util.reflect`, which handles the static fields of objects and inline classes
+  such as `Percent`.
 
 ## Enhancements of the main class
 
@@ -570,7 +638,7 @@ provider of the Kotlin runtime; dependents reach it through `depend:`.
 ## How the `ksp` module works
 
 The module mirrors the feature packages of the API: `ksp` holds what every feature needs,
-`ksp.di` and `ksp.lifecycle` the collectors and checks of one feature each.
+`ksp.di`, `ksp.lifecycle` and `ksp.config` the collectors and checks of one feature each.
 
 1. `VersatiaSymbolProcessor` runs once per compilation. `MainClassLocator` finds the plugin's main
    class (or reads it from `plugin.yml` when the option is set). `EnhancementResolver` resolves
@@ -585,7 +653,9 @@ The module mirrors the feature packages of the API: `ksp` holds what every featu
    parameters, assignable types, reachability. The main class becomes a `PluginDeclaration`
    carrying the enhancements `PluginCollector` found.
 3. `lifecycle.FunctionCollector` collects functions annotated with an enhancement and checks their
-   owner and parameters; the injection rules it applies come from `ksp.di`.
+   owner and parameters; the injection rules it applies come from `ksp.di`. `config.PropertyCollector`
+   does the same for properties, with `config.ValueTypeCheck` for the types `@Value` accepts; the
+   owner rule both share lives in `ksp` (`memberOwner`).
 4. `di.BeanGraphValidator` is pure Kotlin: names, ambiguity and cycle detection over the
    declarations, the plugin included as a dependency-free local bean when it has `@PluginBean`.
 5. `model.DescriptorGenerator` builds the file with KotlinPoet. It is also pure Kotlin, so its

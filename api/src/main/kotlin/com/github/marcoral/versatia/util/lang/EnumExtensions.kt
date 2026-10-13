@@ -12,3 +12,6 @@ inline fun <reified T : Enum<T>> asEnumIgnoreCaseOrThrow(name: String) =
     )
 
 inline fun <reified T : Enum<T>> isEnumIgnoreCase(name: String) = asEnumIgnoreCase<T>(name) != null
+
+/** Like [asEnumIgnoreCase] for an enum class known only at runtime. */
+fun asEnumIgnoreCase(enumClass: Class<out Enum<*>>, name: String) = enumClass.enumConstants.firstOrNull { it.name.equals(name, ignoreCase = true) }

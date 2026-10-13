@@ -1,7 +1,9 @@
 package com.github.marcoral.versatia.ksp
 
+import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.getVisibility
+import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.Visibility
@@ -27,6 +29,18 @@ internal const val JAVA_PLUGIN = "org.bukkit.plugin.java.JavaPlugin"
 internal const val VERSATIA_PLUGIN = "com.github.marcoral.versatia.VersatiaPlugin"
 
 internal fun KSClassDeclaration.extendsJavaPlugin() = getAllSuperTypes().any { it.declaration.qualifiedName?.asString() == JAVA_PLUGIN }
+
+/**
+ * Who holds an instance of this class for the runtime to call a function on or set a property of:
+ * the plugin itself, an `object`, or a bean; null for any other class, whose instance the runtime
+ * could not obtain.
+ */
+internal fun KSClassDeclaration.memberOwner(beanTypes: Set<ClassName>) = when {
+    classKind == ClassKind.OBJECT && !isCompanionObject -> MemberOwner.OBJECT
+    classKind == ClassKind.CLASS && extendsJavaPlugin() -> MemberOwner.PLUGIN
+    toClassName() in beanTypes -> MemberOwner.INSTANCE
+    else -> null
+}
 
 /** [declaration] and every class nested in it, at any depth. */
 internal fun classesIn(declaration: KSDeclaration): Sequence<KSClassDeclaration> =

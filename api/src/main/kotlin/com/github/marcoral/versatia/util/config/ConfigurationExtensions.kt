@@ -23,16 +23,19 @@ fun ConfigurationSection.getBooleanOrNull(key: String) = valueOrNull(key, "a boo
 fun ConfigurationSection.getIntOrNull(key: String) = valueOrNull(key, "an int") { it as? Int }
 fun ConfigurationSection.getLongOrNull(key: String) = valueOrNull(key, "a long") { asLong(it) }
 fun ConfigurationSection.getDoubleOrNull(key: String) = valueOrNull(key, "a number") { (it as? Number)?.toDouble() }
+fun ConfigurationSection.getFloatOrNull(key: String) = valueOrNull(key, "a number") { (it as? Number)?.toFloat() }
 
 fun ConfigurationSection.getBooleanOrThrow(key: String, exceptionMessage: String? = null) = requireValue(key, "a boolean", exceptionMessage) { it as? Boolean }
 fun ConfigurationSection.getIntOrThrow(key: String, exceptionMessage: String? = null) = requireValue(key, "an int", exceptionMessage) { it as? Int }
 fun ConfigurationSection.getLongOrThrow(key: String, exceptionMessage: String? = null) = requireValue(key, "a long", exceptionMessage) { asLong(it) }
 fun ConfigurationSection.getDoubleOrThrow(key: String, exceptionMessage: String? = null) = requireValue(key, "a number", exceptionMessage) { (it as? Number)?.toDouble() }
+fun ConfigurationSection.getFloatOrThrow(key: String, exceptionMessage: String? = null) = requireValue(key, "a number", exceptionMessage) { (it as? Number)?.toFloat() }
 
 fun ConfigurationSection.ifBooleanPresent(key: String, action: (Boolean) -> Unit) { getBooleanOrNull(key)?.let(action) }
 fun ConfigurationSection.ifIntPresent(key: String, action: (Int) -> Unit) { getIntOrNull(key)?.let(action) }
 fun ConfigurationSection.ifLongPresent(key: String, action: (Long) -> Unit) { getLongOrNull(key)?.let(action) }
 fun ConfigurationSection.ifDoublePresent(key: String, action: (Double) -> Unit) { getDoubleOrNull(key)?.let(action) }
+fun ConfigurationSection.ifFloatPresent(key: String, action: (Float) -> Unit) { getFloatOrNull(key)?.let(action) }
 
 /* UNSIGNED */
 
@@ -83,6 +86,16 @@ inline fun <reified T : Enum<T>> ConfigurationSection.getEnumElementList(key: St
 
 @PublishedApi
 internal inline fun <reified T : Enum<T>> enumExpectation() = "one of ${enumEntries<T>().joinToString { it.name }}"
+
+/* ENUMS BY CLASS, for callers that know the enum only at runtime */
+
+fun ConfigurationSection.getEnumElementOrThrow(key: String, enumClass: Class<out Enum<*>>, exceptionMessage: String? = null) =
+    requireValue(key, enumExpectation(enumClass), exceptionMessage) { asEnumIgnoreCase(enumClass, it.toString()) }
+fun ConfigurationSection.getEnumElementList(key: String, enumClass: Class<out Enum<*>>) =
+    getStringList(key).mapIndexed { i, v -> asEnumIgnoreCase(enumClass, v) ?: throw invalidListElement(key, i, v, enumExpectation(enumClass)) }
+
+@PublishedApi
+internal fun enumExpectation(enumClass: Class<out Enum<*>>) = "one of ${enumClass.enumConstants.joinToString { it.name }}"
 
 /* BUKKIT OBJECT TYPES */
 

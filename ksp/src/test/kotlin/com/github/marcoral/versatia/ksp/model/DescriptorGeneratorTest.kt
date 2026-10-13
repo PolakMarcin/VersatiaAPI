@@ -2,7 +2,7 @@ package com.github.marcoral.versatia.ksp.model
 
 import com.github.marcoral.versatia.EventType
 import com.github.marcoral.versatia.di.BeanProcessors
-import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
+import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.engine.descriptor.VersatiaPluginDescriptor
 import com.github.marcoral.versatia.ksp.di.BeanDeclaration
 import com.github.marcoral.versatia.ksp.di.PluginDeclaration
@@ -157,7 +157,7 @@ class DescriptorGeneratorTest {
     fun `emits function targets with direct or reflective invokers`() {
         val autoInvoke = ClassName("com.github.marcoral.versatia.lifecycle", "AutoInvoke")
         val clock = ClassName("com.example", "Clock")
-        fun function(owner: String, name: String, kind: FunctionOwner, reachable: Boolean, vararg parameters: ParameterDeclaration) = FunctionDeclaration(
+        fun function(owner: String, name: String, kind: MemberOwner, reachable: Boolean, vararg parameters: ParameterDeclaration) = FunctionDeclaration(
             ClassName("com.example", owner), kind, name, AnnotationRef(autoInvoke, mapOf("phase" to "PLUGIN_START_ONLY")),
             listOf(Enhancement("com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor", EventType.PLUGIN_START_ONLY)),
             emptyList(), parameters.toList(), reachable,
@@ -166,9 +166,9 @@ class DescriptorGeneratorTest {
             "com.example",
             emptyList(),
             listOf(
-                function("Main", "start", FunctionOwner.PLUGIN, reachable = true, qualified(clock, "wall")),
-                function("Registry", "refresh", FunctionOwner.OBJECT, reachable = true),
-                function("Main", "secret", FunctionOwner.PLUGIN, reachable = false, ParameterDeclaration(clock)),
+                function("Main", "start", MemberOwner.PLUGIN, reachable = true, qualified(clock, "wall")),
+                function("Registry", "refresh", MemberOwner.OBJECT, reachable = true),
+                function("Main", "secret", MemberOwner.PLUGIN, reachable = false, ParameterDeclaration(clock)),
             ),
         )
 
@@ -177,7 +177,7 @@ class DescriptorGeneratorTest {
         assertContains(code, "processorClass = \"com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor\"")
         assertContains(code, "annotation = AnnotationOccurrence(\"com.github.marcoral.versatia.lifecycle.AutoInvoke\", mapOf(\"phase\" to \"PLUGIN_START_ONLY\"))")
         assertContains(code, "functionName = \"start\"")
-        assertContains(code, "owner = FunctionOwner.PLUGIN")
+        assertContains(code, "owner = MemberOwner.PLUGIN")
         assertContains(code, "parameters = listOf(Parameter(\"com.example.Clock\", listOf(AnnotationOccurrence(\"com.github.marcoral.versatia.di.Qualifier\", mapOf(\"value\" to \"wall\")))))")
         assertContains(code, "invoker = Invoker.Direct { instance, args -> (instance as Main).start(args[0] as Clock) }")
         assertContains(code, "invoker = Invoker.Direct { _, _ -> Registry.refresh() }")
@@ -243,5 +243,55 @@ class DescriptorGeneratorTest {
         assertContains(code, "instantiator = Instantiator.Direct { args -> Ledger(args[0] as Clock) }")
         assertContains(code, "instantiator = Instantiator.Direct { _ -> Console }")
         assertContains(code, "instantiator = Instantiator.ObjectInstance(\"com.example.Vault\")")
+    }
+
+    @Test
+    fun `emits property targets with direct or reflective setters`() {
+        val value = ClassName("com.github.marcoral.versatia.config", "Value")
+        val int = ClassName("kotlin", "Int")
+        fun property(owner: String, name: String, kind: MemberOwner, type: TypeDeclaration, reachable: Boolean) = PropertyDeclaration(
+            ClassName("com.example", owner), kind, name, AnnotationRef(value, mapOf("key" to "shop.$name", "file" to "config.yml")),
+            listOf(Enhancement("com.github.marcoral.versatia.config.ValueEnhancementProcessor", EventType.PLUGIN_RELOAD_OR_START)),
+            emptyList(), type, reachable,
+        )
+        val model = DescriptorModel(
+            "com.example",
+            emptyList(),
+            properties = listOf(
+                property("Main", "motd", MemberOwner.PLUGIN, TypeDeclaration(ClassName("kotlin", "String")), reachable = true),
+                property("Limits", "slots", MemberOwner.OBJECT, TypeDeclaration(ClassName("kotlin.collections", "List"), listOf(TypeDeclaration(int)), nullable = true), reachable = true),
+                property("Shop", "tax", MemberOwner.INSTANCE, TypeDeclaration(int), reachable = false),
+            ),
+        )
+
+        val code = DescriptorGenerator.generate(model).toString()
+
+        assertContains(code, "@Suppress(\"UNCHECKED_CAST\")\npublic object VersatiaDescriptor")
+        assertContains(code, "processorClass = \"com.github.marcoral.versatia.config.ValueEnhancementProcessor\"")
+        assertContains(code, "annotation = AnnotationOccurrence(\"com.github.marcoral.versatia.config.Value\", mapOf(\"key\" to \"shop.motd\", \"file\" to \"config.yml\"))")
+        assertContains(code, "propertyName = \"motd\"")
+        assertContains(code, "owner = MemberOwner.PLUGIN")
+        assertContains(code, "type = TypeReference(\"kotlin.String\")")
+        assertContains(code, "setter = Setter.Direct { instance, value -> (instance as Main).motd = value as String }")
+        assertContains(code, "type = TypeReference(\"kotlin.collections.List\", listOf(TypeReference(\"kotlin.Int\")), true)")
+        assertContains(code, "setter = Setter.Direct { _, value -> Limits.slots = value as List<Int>? }")
+        assertContains(code, "setter = Setter.Reflective(\"com.example.Shop\", \"tax\")")
+    }
+
+    @Test
+    fun `lists properties before functions`() {
+        val property = PropertyDeclaration(
+            ClassName("com.example", "Main"), MemberOwner.PLUGIN, "motd", AnnotationRef(ClassName("com.github.marcoral.versatia.config", "Value")),
+            listOf(Enhancement("com.example.P", EventType.PLUGIN_RELOAD_OR_START)), emptyList(), TypeDeclaration(ClassName("kotlin", "String")), reachable = true,
+        )
+        val function = FunctionDeclaration(
+            ClassName("com.example", "Main"), MemberOwner.PLUGIN, "start", AnnotationRef(ClassName("com.github.marcoral.versatia.lifecycle", "AutoInvoke")),
+            listOf(Enhancement("com.example.P", EventType.PLUGIN_RELOAD_OR_START)), emptyList(), emptyList(), reachable = true,
+        )
+
+        val code = DescriptorGenerator.generate(DescriptorModel("com.example", emptyList(), functions = listOf(function), properties = listOf(property))).toString()
+
+        assertTrue(code.indexOf("PropertyTarget(") < code.indexOf("FunctionTarget("), "values are set before functions run")
+        assertFalse("@Suppress" in code, "no unchecked cast without a generic property")
     }
 }

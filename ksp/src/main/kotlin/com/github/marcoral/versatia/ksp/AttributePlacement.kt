@@ -4,6 +4,7 @@ import com.github.marcoral.versatia.ConditionalOnPlugin
 import com.github.marcoral.versatia.FriendlyName
 import com.github.marcoral.versatia.VersatiaEnhancement
 import com.google.devtools.ksp.getDeclaredFunctions
+import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSAnnotation
@@ -15,8 +16,8 @@ import com.google.devtools.ksp.symbol.KSNode
 /**
  * Checks the attributes the runtime reads itself, rather than a processor: `@FriendlyName` belongs
  * on the main class and names one word; `@ConditionalOnPlugin` belongs on an enhanced class, a
- * class declaring enhanced functions or such a function, never on the main class, and names at
- * least one plugin. See docs/enhancements.md.
+ * class declaring enhanced functions or properties, or such a function, never on the main class,
+ * and names at least one plugin. See docs/enhancements.md.
  */
 internal class AttributePlacement(private val logger: KSPLogger, private val enhancements: EnhancementResolver) {
     private var failed = false
@@ -40,8 +41,8 @@ internal class AttributePlacement(private val logger: KSPLogger, private val enh
             clazz.occurrenceOf(conditional)?.let { occurrence ->
                 when {
                     isMain -> fail(clazz, "@ConditionalOnPlugin cannot apply to $name, the plugin's main class")
-                    clazz.qualifiedName?.asString() !in enhancedClasses && clazz.getDeclaredFunctions().none { it.isEnhanced() } ->
-                        fail(clazz, "@ConditionalOnPlugin on $name has no effect: $name is not enhanced and declares no enhanced function")
+                    clazz.qualifiedName?.asString() !in enhancedClasses && clazz.declaresNothingEnhanced() ->
+                        fail(clazz, "@ConditionalOnPlugin on $name has no effect: $name is not enhanced and declares no enhanced function or property")
                     else -> checkPlugins(occurrence, clazz, name)
                 }
             }
@@ -64,7 +65,9 @@ internal class AttributePlacement(private val logger: KSPLogger, private val enh
         if (plugins.isEmpty() || plugins.any { !(it as? String).isWord() }) fail(node, "@ConditionalOnPlugin on $label must name plugins, one word each")
     }
 
-    private fun KSFunctionDeclaration.isEnhanced() = annotations.any { enhancements.inherits(enhancements.chainOf(it), enhancementAnnotation) }
+    private fun KSClassDeclaration.declaresNothingEnhanced() = getDeclaredFunctions().none { it.isEnhanced() } && getDeclaredProperties().none { it.isEnhanced() }
+
+    private fun KSAnnotated.isEnhanced() = annotations.any { enhancements.inherits(enhancements.chainOf(it), enhancementAnnotation) }
 
     private fun KSAnnotated.occurrenceOf(annotationName: String) = annotations.firstOrNull { it.declaration()?.qualifiedName?.asString() == annotationName }
 

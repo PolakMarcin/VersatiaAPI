@@ -16,7 +16,7 @@ interface VersatiaPluginDescriptor {
 
     companion object {
         /** Format produced by this VersatiaAPI and understood by a VersatiaCore built with it. */
-        val FORMAT_VERSION = DescriptorVersion(1, 0)
+        val FORMAT_VERSION = DescriptorVersion(1, 1)
 
         const val CLASS_SIMPLE_NAME = "VersatiaDescriptor"
 

@@ -39,6 +39,15 @@ data class Parameter(
     val annotations: List<AnnotationOccurrence> = emptyList(),
 )
 
+/** A type as written on a property: a Kotlin qualified name, its type arguments and whether it accepts `null`. */
+data class TypeReference(
+    val name: String,
+    val arguments: List<TypeReference> = emptyList(),
+    val nullable: Boolean = false,
+) {
+    override fun toString() = name + (if (arguments.isEmpty()) "" else arguments.joinToString(", ", "<", ">")) + (if (nullable) "?" else "")
+}
+
 /**
  * A class whose instances the runtime may create. Type names are Kotlin qualified names
  * (`com.example.Outer.Inner`).
@@ -60,8 +69,8 @@ data class PluginTarget(
     val annotations: List<AnnotationOccurrence>,
 ) : ElementTarget
 
-/** Who holds the instance a [FunctionTarget] is called on. */
-enum class FunctionOwner {
+/** Who holds the instance a [FunctionTarget] is called on or a [PropertyTarget] is set on. */
+enum class MemberOwner {
     /** The plugin's main class; the instance is the plugin itself. */
     PLUGIN,
     /** A Kotlin `object`. */
@@ -75,10 +84,23 @@ data class FunctionTarget(
     override val className: String,
     val binaryClassName: String,
     val functionName: String,
-    val owner: FunctionOwner,
+    val owner: MemberOwner,
     val annotations: List<AnnotationOccurrence>,
     val parameters: List<Parameter>,
     val invoker: Invoker,
+    /** The attributes written on the declaring class; what applies to a whole class is read from here. */
+    val classAnnotations: List<AnnotationOccurrence> = emptyList(),
+) : ElementTarget
+
+/** A mutable property the runtime may set. [binaryClassName] is the JVM name of the declaring class. */
+data class PropertyTarget(
+    override val className: String,
+    val binaryClassName: String,
+    val propertyName: String,
+    val owner: MemberOwner,
+    val type: TypeReference,
+    val annotations: List<AnnotationOccurrence>,
+    val setter: Setter,
     /** The attributes written on the declaring class; what applies to a whole class is read from here. */
     val classAnnotations: List<AnnotationOccurrence> = emptyList(),
 ) : ElementTarget

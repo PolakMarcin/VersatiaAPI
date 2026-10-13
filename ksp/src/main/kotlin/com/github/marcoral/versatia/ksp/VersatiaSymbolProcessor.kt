@@ -1,10 +1,12 @@
 package com.github.marcoral.versatia.ksp
 
+import com.github.marcoral.versatia.ksp.config.PropertyCollector
 import com.github.marcoral.versatia.ksp.di.BeanCollector
 import com.github.marcoral.versatia.ksp.di.BeanGraphValidator
 import com.github.marcoral.versatia.ksp.lifecycle.FunctionCollector
 import com.github.marcoral.versatia.ksp.model.DescriptorGenerator
 import com.github.marcoral.versatia.ksp.model.DescriptorModel
+import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
@@ -12,7 +14,6 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.squareup.kotlinpoet.ksp.writeTo
-import com.google.devtools.ksp.getClassDeclarationByName
 
 class VersatiaSymbolProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
@@ -36,8 +37,11 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
         val beanCollector = BeanCollector(environment.logger, mainClass, enhancements, attributes)
         val beans = beanCollector.collect(files)
         val plugin = beanCollector.describePlugin(pluginCollector.collect(mainClass))
-        val functionCollector = FunctionCollector(environment.logger, beans.map { it.type }.toSet(), enhancements, attributes)
+        val beanTypes = beans.map { it.type }.toSet()
+        val functionCollector = FunctionCollector(environment.logger, beanTypes, enhancements, attributes)
         val functions = functionCollector.collect(files)
+        val propertyCollector = PropertyCollector(environment.logger, beanTypes, enhancements, attributes)
+        val properties = propertyCollector.collect(files)
         val subclassCollector = SubclassCollector(environment.logger, mainClass, attributes)
         val subclasses = subclassCollector.collect(files, plugin.enhancements)
         val placement = AttributePlacement(environment.logger, enhancements)
@@ -47,7 +51,7 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
         val problems = BeanGraphValidator.validate(beans, functions, plugin, subclasses.mapNotNull { it.clazz }.distinct(), pluginTypes)
         problems.forEach { environment.logger.error(it.message, it.node) }
         val failed = enhancements.hadErrors || attributes.hadErrors || pluginCollector.hadErrors || beanCollector.hadErrors ||
-            functionCollector.hadErrors || subclassCollector.hadErrors || placement.hadErrors
+            functionCollector.hadErrors || propertyCollector.hadErrors || subclassCollector.hadErrors || placement.hadErrors
         if (failed || problems.isNotEmpty()) return emptyList()
 
         val model = DescriptorModel(
@@ -56,6 +60,7 @@ internal class VersatiaSymbolProcessor(private val environment: SymbolProcessorE
             functions = functions.sortedWith(compareBy({ it.owner.canonicalName }, { it.name })),
             plugin = plugin,
             subclasses = subclasses,
+            properties = properties.sortedWith(compareBy({ it.owner.canonicalName }, { it.name })),
         )
         DescriptorGenerator.generate(model)
             .writeTo(environment.codeGenerator, Dependencies(aggregating = true, *files.toTypedArray()))

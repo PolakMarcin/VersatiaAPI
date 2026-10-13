@@ -1,16 +1,20 @@
 package com.github.marcoral.versatia.ksp
 
 import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.config.ConfigProcessors
 import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.di.PluginBean
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
 import com.github.marcoral.versatia.engine.descriptor.Instantiator
 import com.github.marcoral.versatia.engine.descriptor.ClassTarget
-import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
+import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.engine.descriptor.FunctionTarget
 import com.github.marcoral.versatia.engine.descriptor.Invoker
 import com.github.marcoral.versatia.engine.descriptor.Parameter
 import com.github.marcoral.versatia.engine.descriptor.PluginTarget
+import com.github.marcoral.versatia.engine.descriptor.PropertyTarget
+import com.github.marcoral.versatia.engine.descriptor.Setter
+import com.github.marcoral.versatia.engine.descriptor.TypeReference
 import com.github.marcoral.versatia.engine.descriptor.VersatiaPluginDescriptor
 import com.github.marcoral.versatia.lifecycle.LifecycleProcessors
 import com.github.marcoral.versatia.resources.ExtractResources
@@ -300,7 +304,8 @@ class VersatiaSymbolProcessorTest {
                 import com.github.marcoral.versatia.EventType
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.di.Bean
-                import com.github.marcoral.versatia.di.BeanProcessors
+                import com.github.marcoral.versatia.config.ConfigProcessors
+import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.di.PluginBean
 
                 @Target(AnnotationTarget.CLASS)
@@ -368,12 +373,12 @@ import com.github.marcoral.versatia.di.PluginBean
         )
         assertTrue(elements.all { it.processorClass == LifecycleProcessors.AUTO_INVOKE })
         val warmUp = functions.getValue("com.example.alpha.AlphaPlugin.warmUp")
-        assertEquals(FunctionOwner.PLUGIN, warmUp.owner)
+        assertEquals(MemberOwner.PLUGIN, warmUp.owner)
         assertEquals(listOf(Parameter("com.example.alpha.Clock")), warmUp.parameters)
         assertEquals(Invoker.Reflective("com.example.alpha.AlphaPlugin", "warmUp", listOf("com.example.alpha.Clock")), warmUp.invoker)
         assertIs<Invoker.Direct>(functions.getValue("com.example.alpha.AlphaPlugin.announce").invoker)
-        assertEquals(FunctionOwner.OBJECT, functions.getValue("com.example.alpha.Registry.flush").owner)
-        assertEquals(FunctionOwner.INSTANCE, functions.getValue("com.example.alpha.Banner.show").owner)
+        assertEquals(MemberOwner.OBJECT, functions.getValue("com.example.alpha.Registry.flush").owner)
+        assertEquals(MemberOwner.INSTANCE, functions.getValue("com.example.alpha.Banner.show").owner)
         val phases = elements.associate { (it.target as FunctionTarget).functionName to it.phase }
         assertEquals(EventType.PLUGIN_RELOAD_OR_START, phases["announce"])
         assertEquals(EventType.PLUGIN_STOP, phases["flush"])
@@ -648,7 +653,7 @@ import com.github.marcoral.versatia.di.PluginBean
         val elements = result.descriptor().elements
         val element = elements.first()
         assertEquals(BeanProcessors.PLUGIN, element.processorClass)
-        assertEquals(EventType.PLUGIN_START_ONLY, element.phase)
+        assertEquals(EventType.PLUGIN_RELOAD_OR_START, element.phase)
         assertEquals(AnnotationOccurrence(PluginBean::class.java.name), element.annotation, "inherited from VersatiaPlugin")
         assertEquals(ResourceProcessors.EXTRACT, elements[1].processorClass, "VersatiaPlugin's second enhancement")
         assertEquals(AnnotationOccurrence(ExtractResources::class.java.name), elements[1].annotation)
@@ -1113,7 +1118,7 @@ import com.github.marcoral.versatia.di.PluginBean
         assertContains(result.messages, "@FriendlyName on AlphaPlugin must be one word without spaces")
         assertContains(result.messages, "@ConditionalOnPlugin cannot apply to AlphaPlugin, the plugin's main class")
         assertContains(result.messages, "@FriendlyName on Config has no effect: it belongs on the plugin's main class")
-        assertContains(result.messages, "@ConditionalOnPlugin on Tools has no effect: Tools is not enhanced and declares no enhanced function")
+        assertContains(result.messages, "@ConditionalOnPlugin on Tools has no effect: Tools is not enhanced and declares no enhanced function or property")
         assertContains(result.messages, "@ConditionalOnPlugin on Tools.plain() has no effect: the function is not enhanced")
         assertContains(result.messages, "@ConditionalOnPlugin on Bridge must name plugins, one word each")
         assertTrue(result.sourcesGeneratedBySymbolProcessor.none(), "no descriptor must be generated")
@@ -1151,5 +1156,294 @@ import com.github.marcoral.versatia.di.PluginBean
         assertContains(result.messages, "com.example.alpha.Strict is a prototype, so its com.example.alpha.AlphaPlugin parameter receives the consuming plugin; declare it as VersatiaPlugin (or a supertype), which every plugin is")
         assertFalse(result.messages.contains("Session is a prototype"), "VersatiaPlugin and Plugin are types every plugin has")
         assertFalse(result.messages.contains("Shared is a prototype"), "singletons keep the owner's instance")
+    }
+
+    @Test
+    fun `describes Value properties of the plugin, objects and beans`() {
+        val result = compile(
+            SourceFile.kotlin(
+                "Valued.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.Value
+                import com.github.marcoral.versatia.di.LocalBean
+                import com.github.marcoral.versatia.util.type.Percent
+
+                enum class Mode { EASY, HARD }
+
+                class AlphaPlugin : VersatiaPlugin() {
+                    @Value("motd")
+                    lateinit var motd: String
+
+                    @Value("mode", file = "rules.yml")
+                    private var mode: Mode = Mode.EASY
+                }
+
+                object Limits {
+                    @Value("limits.slots")
+                    var slots: List<Int> = emptyList()
+
+                    @Value("limits.tax")
+                    var tax: Percent? = null
+                }
+
+                @LocalBean
+                class Shop {
+                    @Value("shop.open")
+                    var open = false
+                        private set
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+        val elements = result.descriptor().elements.filter { it.target is PropertyTarget }
+        val properties = elements.map { it.target as PropertyTarget }.associateBy { "${it.className}.${it.propertyName}" }
+        assertEquals(
+            setOf("com.example.alpha.AlphaPlugin.motd", "com.example.alpha.AlphaPlugin.mode", "com.example.alpha.Limits.slots", "com.example.alpha.Limits.tax", "com.example.alpha.Shop.open"),
+            properties.keys,
+        )
+        assertTrue(elements.all { it.processorClass == ConfigProcessors.VALUE && it.phase == EventType.PLUGIN_RELOAD_OR_START })
+        assertEquals(
+            AnnotationOccurrence("com.github.marcoral.versatia.config.Value", mapOf("key" to "mode", "file" to "rules.yml", "mapper" to "com.github.marcoral.versatia.config.NoMapper")),
+            elements.single { (it.target as PropertyTarget).propertyName == "mode" }.annotation,
+        )
+        assertEquals("config.yml", elements.single { (it.target as PropertyTarget).propertyName == "motd" }.annotation.arguments["file"])
+
+        val motd = properties.getValue("com.example.alpha.AlphaPlugin.motd")
+        assertEquals(MemberOwner.PLUGIN, motd.owner)
+        assertEquals(TypeReference("kotlin.String"), motd.type)
+        assertIs<Setter.Direct>(motd.setter)
+        assertEquals(Setter.Reflective("com.example.alpha.AlphaPlugin", "mode"), properties.getValue("com.example.alpha.AlphaPlugin.mode").setter)
+        assertEquals(TypeReference("com.example.alpha.Mode"), properties.getValue("com.example.alpha.AlphaPlugin.mode").type)
+        val slots = properties.getValue("com.example.alpha.Limits.slots")
+        assertEquals(MemberOwner.OBJECT, slots.owner)
+        assertEquals(TypeReference("kotlin.collections.List", listOf(TypeReference("kotlin.Int"))), slots.type)
+        assertEquals(TypeReference("com.github.marcoral.versatia.util.type.Percent", nullable = true), properties.getValue("com.example.alpha.Limits.tax").type)
+        val open = properties.getValue("com.example.alpha.Shop.open")
+        assertEquals(MemberOwner.INSTANCE, open.owner)
+        assertEquals(Setter.Reflective("com.example.alpha.Shop", "open"), open.setter, "a private setter needs reflection")
+
+        val limits = result.classLoader.loadClass("com.example.alpha.Limits").getDeclaredField("INSTANCE").get(null)
+        slots.setter.set(result.classLoader, limits, listOf(1, 2))
+        assertEquals(listOf(1, 2), limits.javaClass.getMethod("getSlots").invoke(limits))
+        val shop = result.classLoader.loadClass("com.example.alpha.Shop").getDeclaredConstructor().newInstance()
+        open.setter.set(result.classLoader, shop, true)
+        assertEquals(true, shop.javaClass.getMethod("getOpen").invoke(shop))
+    }
+
+    @Test
+    fun `rejects Value properties the runtime could not set`() {
+        val result = compile(
+            SourceFile.kotlin(
+                "BadValued.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.Value
+                import java.util.Date
+
+                @Value("top")
+                var top = 0
+
+                class AlphaPlugin : VersatiaPlugin() {
+                    @Value("fixed")
+                    val fixed = 0
+
+                    @Value("when")
+                    var date: Date? = null
+
+                    @Value("holes")
+                    var holes: List<Int?> = emptyList()
+
+                    @Value("keyed")
+                    var keyed: Map<Int, String> = emptyMap()
+
+                    @Value("mutable")
+                    var mutable: MutableList<String> = mutableListOf()
+                }
+
+                class Plain {
+                    @Value("nobody")
+                    var nobody = 0
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode)
+        assertContains(result.messages, "top cannot be enhanced: it is a top-level property")
+        assertContains(result.messages, "AlphaPlugin.fixed must be a var to be enhanced")
+        assertContains(result.messages, "@Value on AlphaPlugin.date: Date? is not a supported type; supported are")
+        assertContains(result.messages, "@Value on AlphaPlugin.holes: the elements of List<Int?> must not be nullable")
+        assertContains(result.messages, "@Value on AlphaPlugin.keyed: the keys of Map<Int, String> must be String")
+        assertContains(result.messages, "@Value on AlphaPlugin.mutable: MutableList<String> is not a supported type")
+        assertContains(result.messages, "Plain.nobody cannot be enhanced: Plain is neither the plugin's main class, an object nor a bean")
+        assertContains(result.messages, "BadValued.kt:")
+        assertTrue(result.sourcesGeneratedBySymbolProcessor.none(), "no descriptor must be generated")
+    }
+
+    @Test
+    fun `records Value mappers and checks what they map to`() {
+        val mappers = """
+            package com.example.alpha
+
+            import com.github.marcoral.versatia.config.ValueMapper
+            import com.github.marcoral.versatia.util.config.getIntOrThrow
+            import com.github.marcoral.versatia.util.config.getLongOrThrow
+            import org.bukkit.configuration.ConfigurationSection
+
+            object TicksFromSeconds : ValueMapper<Long> {
+                override fun map(section: ConfigurationSection, key: String) = section.getLongOrThrow(key) * 20
+            }
+
+            data class Range(val min: Int, val max: Int) {
+                object Mapper : ValueMapper<Range> {
+                    override fun map(section: ConfigurationSection, key: String) = Range(section.getIntOrThrow("${'$'}key.min"), section.getIntOrThrow("${'$'}key.max"))
+                }
+            }
+
+            class Scaled(private val factor: Int = 2) : ValueMapper<Int> {
+                override fun map(section: ConfigurationSection, key: String) = section.getIntOrThrow(key) * factor
+            }
+
+            class Needy(private val factor: Int) : ValueMapper<Int> {
+                override fun map(section: ConfigurationSection, key: String) = section.getIntOrThrow(key) * factor
+            }
+        """
+        val accepted = compile(
+            SourceFile.kotlin("Mappers.kt", mappers),
+            SourceFile.kotlin(
+                "Mapped.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.Value
+
+                class AlphaPlugin : VersatiaPlugin() {
+                    @Value("restock", mapper = TicksFromSeconds::class)
+                    var restock = 0L
+
+                    @Value("range", mapper = Range.Mapper::class)
+                    var range: Range? = null
+
+                    @Value("scaled", mapper = Scaled::class)
+                    var scaled = 0
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+        assertEquals(KotlinCompilation.ExitCode.OK, accepted.exitCode, accepted.messages)
+        val mapperOf = accepted.descriptor().elements.filter { it.target is PropertyTarget }.associate { (it.target as PropertyTarget).propertyName to it.annotation.arguments["mapper"] }
+        assertEquals(mapOf("restock" to "com.example.alpha.TicksFromSeconds", "range" to "com.example.alpha.Range.Mapper", "scaled" to "com.example.alpha.Scaled"), mapperOf)
+
+        val rejected = compile(
+            SourceFile.kotlin("Mappers.kt", mappers),
+            SourceFile.kotlin(
+                "BadMapped.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.Value
+
+                class AlphaPlugin : VersatiaPlugin() {
+                    @Value("restock", mapper = TicksFromSeconds::class)
+                    var restock = 0
+
+                    @Value("needy", mapper = Needy::class)
+                    var needy = 0
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+        assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, rejected.exitCode)
+        assertContains(rejected.messages, "@Value on AlphaPlugin.restock: mapper TicksFromSeconds maps to Long, which Int cannot hold")
+        assertContains(rejected.messages, "@Value on AlphaPlugin.needy: mapper Needy must be an object or a class with a no-argument constructor")
+    }
+
+    @Test
+    fun `fills the cell of a Value property holding a PreviousValueTracking`() {
+        val accepted = compile(
+            SourceFile.kotlin(
+                "Tracked.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.PreviousValueTracking
+                import com.github.marcoral.versatia.config.Value
+                import com.github.marcoral.versatia.di.LocalBean
+
+                class AlphaPlugin : VersatiaPlugin()
+
+                object Timers {
+                    @Value("interval")
+                    val interval = PreviousValueTracking<Int>()
+                }
+
+                @LocalBean
+                class Shop {
+                    @Value("days")
+                    private val days = PreviousValueTracking<List<Int>?>()
+
+                    fun days() = days
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+        assertEquals(KotlinCompilation.ExitCode.OK, accepted.exitCode, accepted.messages)
+        val properties = accepted.descriptor().elements.map { it.target }.filterIsInstance<PropertyTarget>().associateBy { it.propertyName }
+        val interval = properties.getValue("interval")
+        assertEquals(TypeReference("com.github.marcoral.versatia.config.PreviousValueTracking", listOf(TypeReference("kotlin.Int"))), interval.type)
+        assertIs<Setter.Direct>(interval.setter)
+        val days = properties.getValue("days")
+        assertEquals(Setter.Reflective("com.example.alpha.Shop", "days", "value"), days.setter, "a private property is read reflectively, its cell filled")
+
+        val timers = accepted.classLoader.loadClass("com.example.alpha.Timers").getDeclaredField("INSTANCE").get(null)
+        interval.setter.set(accepted.classLoader, timers, 5)
+        interval.setter.set(accepted.classLoader, timers, 8)
+        assertEquals("PreviousValueTracking(8, previous=5)", timers.javaClass.getMethod("getInterval").invoke(timers).toString())
+        val shop = accepted.classLoader.loadClass("com.example.alpha.Shop").getDeclaredConstructor().newInstance()
+        days.setter.set(accepted.classLoader, shop, listOf(1, 7))
+        assertEquals("PreviousValueTracking([1, 7], previous=none)", shop.javaClass.getMethod("days").invoke(shop).toString())
+
+        val rejected = compile(
+            SourceFile.kotlin(
+                "BadTracked.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.PreviousValueTracking
+                import com.github.marcoral.versatia.config.Value
+                import java.util.Date
+
+                class AlphaPlugin : VersatiaPlugin()
+
+                object Timers {
+                    @Value("missing")
+                    val missing: PreviousValueTracking<Int>? = null
+
+                    @Value("date")
+                    val date = PreviousValueTracking<Date>()
+                }
+                """,
+            ),
+            mainClass = null,
+        )
+        assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, rejected.exitCode)
+        assertContains(rejected.messages, "@Value on Timers.missing: a PreviousValueTracking must not be nullable; the runtime fills the cell the property holds")
+        assertContains(rejected.messages, "@Value on Timers.date: Date is not a supported type")
     }
 }

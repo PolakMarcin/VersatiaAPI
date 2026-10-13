@@ -1,18 +1,16 @@
 package com.github.marcoral.versatia.ksp.lifecycle
 
 import com.github.marcoral.versatia.VersatiaEnhancement
-import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
 import com.github.marcoral.versatia.ksp.Attributes
 import com.github.marcoral.versatia.ksp.EnhancementResolver
 import com.github.marcoral.versatia.ksp.classesIn
 import com.github.marcoral.versatia.ksp.di.allReachable
 import com.github.marcoral.versatia.ksp.di.injectableParametersOf
-import com.github.marcoral.versatia.ksp.extendsJavaPlugin
 import com.github.marcoral.versatia.ksp.isReachable
+import com.github.marcoral.versatia.ksp.memberOwner
 import com.github.marcoral.versatia.ksp.model.FunctionDeclaration
 import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.processing.KSPLogger
-import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
@@ -55,7 +53,7 @@ internal class FunctionCollector(
         val (annotation, resolved) = enhanced.single()
         if (resolved.isEmpty()) return null
 
-        val ownerKind = ownerKindOf(clazz) ?: return fail(
+        val ownerKind = clazz.memberOwner(beanTypes) ?: return fail(
             function,
             "$name cannot be enhanced: ${clazz.simpleName.asString()} is neither the plugin's main class, an object nor a bean",
         )
@@ -79,13 +77,6 @@ internal class FunctionCollector(
             node = function,
             classAnnotations = attributes.of(clazz, function),
         )
-    }
-
-    private fun ownerKindOf(clazz: KSClassDeclaration) = when {
-        clazz.classKind == ClassKind.OBJECT && !clazz.isCompanionObject -> FunctionOwner.OBJECT
-        clazz.classKind == ClassKind.CLASS && clazz.extendsJavaPlugin() -> FunctionOwner.PLUGIN
-        clazz.toClassName() in beanTypes -> FunctionOwner.INSTANCE
-        else -> null
     }
 
     private fun fail(node: KSNode, message: String): Nothing? {

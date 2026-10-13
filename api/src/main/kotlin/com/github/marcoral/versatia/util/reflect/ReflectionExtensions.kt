@@ -1,5 +1,7 @@
 package com.github.marcoral.versatia.util.reflect
 
+import java.lang.reflect.AccessibleObject
+import java.lang.reflect.Field
 import java.lang.reflect.Modifier
 import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
@@ -22,17 +24,25 @@ fun isClassInClasspath(qualifiedClassName: String, classLoader: ClassLoader) = t
     false
 }
 
-fun <T, V> KMutableProperty1<T, V>.forceSetValue(instance: T, value: V) = withAccessible {
+fun <T, V> KMutableProperty1<T, V>.forceSetValue(instance: T, value: V) {
+    // Static backing fields (properties of Kotlin objects) are set through java.lang.reflect alone,
+    // without touching the kotlin-reflect accessors; see docs/api.md for the limitations this works around
     val field = javaField
-    // Static backing fields (properties of Kotlin objects) must be set through java.lang.reflect;
-    // see docs/api.md for the kotlin-reflect limitation this works around
-    if (field != null && Modifier.isStatic(field.modifiers)) field.set(null, value) else set(instance, value)
+    if (field != null && Modifier.isStatic(field.modifiers)) field.withAccessible { field.setStatic(value) } else withAccessible { set(instance, value) }
+}
+
+/** A boxed inline class value, such as a `Percent`, is unboxed when the field holds the underlying type. */
+private fun Field.setStatic(value: Any?) = try {
+    set(null, value)
+} catch (e: IllegalArgumentException) {
+    val unbox = value?.javaClass?.methods?.firstOrNull { it.name == "unbox-impl" && it.parameterCount == 0 } ?: throw e
+    set(null, unbox.invoke(value))
 }
 
 @Suppress("UNCHECKED_CAST")
-fun <T, V> KProperty1<T, V>.forceGetValue(instance: T) = withAccessible {
+fun <T, V> KProperty1<T, V>.forceGetValue(instance: T): V {
     val field = javaField
-    if (field != null && Modifier.isStatic(field.modifiers)) field.get(null) as V else get(instance)
+    return if (field != null && Modifier.isStatic(field.modifiers)) field.withAccessible { field.get(null) as V } else withAccessible { get(instance) }
 }
 
 fun KFunction<*>.forceInvoke(vararg args: Any?) = withAccessible { call(*args) }
@@ -56,6 +66,17 @@ private fun <T : Any> KClass<T>.readInstanceField(): T? {
         return java.cast(field.get(null))
     } finally {
         field.isAccessible = wasAccessible
+    }
+}
+
+/** For static members only: [AccessibleObject.canAccess] takes no instance for them. */
+private inline fun <R> AccessibleObject.withAccessible(block: () -> R): R {
+    val wasAccessible = canAccess(null)
+    isAccessible = true
+    try {
+        return block()
+    } finally {
+        isAccessible = wasAccessible
     }
 }
 

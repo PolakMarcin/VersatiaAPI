@@ -19,9 +19,10 @@ that deliver no feature of their own but are needed for the framework to work.
 | Package                  | Contents                                                                  |
 |--------------------------|---------------------------------------------------------------------------|
 | `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `@VersatiaSubclassEnhancement`, `EnhancementProcessor`, `EnhancementContext`, `StateStore`, `EventType`, `LifecycleEvent`, `EnhancementException`, `@VersatiaDisabler`) and the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`, `@DisableVersatiaFeatures`) |
-| `engine.descriptor`      | Model of the generated descriptor: `VersatiaPluginDescriptor`, `EnhancedElement`, `AnnotationOccurrence`, `ClassTarget`, `FunctionTarget`, `PluginTarget`, `Parameter`, `Instantiator`, `Invoker`, `DescriptorVersion` |
+| `engine.descriptor`      | Model of the generated descriptor: `VersatiaPluginDescriptor`, `EnhancedElement`, `AnnotationOccurrence`, `ClassTarget`, `FunctionTarget`, `PropertyTarget`, `PluginTarget`, `MemberOwner`, `Parameter`, `TypeReference`, `Instantiator`, `Invoker`, `Setter`, `DescriptorVersion` |
 | `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@PluginBean`; `@Qualifier`, `@Primary`; `Reloadable`, beans reloaded with their plugin; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
 | `lifecycle`              | `@AutoInvoke`, functions called at a lifecycle phase; `LifecycleProcessors` |
+| `config`                 | `@Value`, properties set from the plugin's YAML files at start and reload; `ValueTypes`, the types it reads by itself; `ValueMapper` and `NoMapper` for any other; `PreviousValueTracking`, a cell keeping the value it replaced; `ConfigProcessors` |
 | `resources`              | `@ExtractResources`, files shipped in the JAR extracted to the data folder; `ResourceProcessors` |
 | `event`                  | `@RegisterListeners`, Bukkit listeners registered at start; `EventProcessors` |
 | `util.*`                 | Independent helpers, described below                                      |
@@ -66,7 +67,9 @@ not a number, so a typo in a config file turns into a silent default. The helper
 "Invalid" is type-specific and strict: `getIntOrNull` accepts only an `Int` (a YAML value such as
 `3000000000` loads as `Long` and is rejected, use `getLongOrNull`), unsigned getters reject negative
 numbers instead of wrapping them, `getPercent*` requires a trailing `%`, enum getters match the
-constant name ignoring case and list the allowed names in the error.
+constant name ignoring case and list the allowed names in the error. The enum getters exist twice:
+reified for a type known at compile time and with a `Class<out Enum<*>>` parameter for the
+value processor, which knows the enum only by name.
 
 `ConfigurationValueException` messages always contain the full dotted path of the key
 (`ConfigurationSection.pathOf(key)`), so the user can find the line in the file. The optional
@@ -131,8 +134,11 @@ are lambdas and evaluated only on failure.
 the previous accessibility afterward (they do not blindly reset it to `false`).
 
 Properties of Kotlin `object`s are backed by static fields, which `kotlin-reflect` cannot set through
-`KMutableProperty1.set` on the object instance. The helpers detect a static backing field and go
-through `java.lang.reflect.Field` instead. Background:
+`KMutableProperty1.set` on the object instance; with an inline class type, such as `Percent`, it
+cannot even describe the accessor (`Inconsistent number of parameters in the descriptor and Java
+reflection object`). The helpers detect a static backing field and go through
+`java.lang.reflect.Field` alone, making only the field accessible, and unbox a boxed inline class
+value through its `unbox-impl` method when the field holds the underlying type. Background:
 https://stackoverflow.com/questions/79443662
 
 `isClassInClasspath(name, classLoader)` takes the loader explicitly because every plugin on a Paper

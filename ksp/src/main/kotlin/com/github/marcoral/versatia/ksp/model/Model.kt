@@ -1,11 +1,13 @@
 package com.github.marcoral.versatia.ksp.model
 
 import com.github.marcoral.versatia.EventType
-import com.github.marcoral.versatia.engine.descriptor.FunctionOwner
+import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.ksp.di.BeanDeclaration
 import com.github.marcoral.versatia.ksp.di.PluginDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.TypeName
 
 /** One `@VersatiaEnhancement` resolved for a concrete occurrence: which processor, at which phase. */
 internal data class Enhancement(val processorClass: String, val phase: EventType)
@@ -31,6 +33,11 @@ internal data class AnnotationRef(val type: ClassName, val arguments: Map<String
 /** A constructor or function parameter with the attributes recorded on it. */
 internal data class ParameterDeclaration(val type: ClassName, val annotations: List<AnnotationRef> = emptyList())
 
+/** A type as written on a property: the facts a `TypeReference` records, and the Kotlin type the generated code casts to. */
+internal data class TypeDeclaration(val type: ClassName, val arguments: List<TypeDeclaration> = emptyList(), val nullable: Boolean = false) {
+    fun asTypeName(): TypeName = (if (arguments.isEmpty()) type else type.parameterizedBy(arguments.map { it.asTypeName() })).copy(nullable = nullable)
+}
+
 /** A class the runtime may instantiate: the facts a `ClassTarget` records. */
 internal data class ClassDeclaration(
     val type: ClassName,
@@ -54,7 +61,7 @@ internal data class SubclassElement(
 /** A function carrying an enhancement, such as `@AutoInvoke`; its parameters are injected. */
 internal data class FunctionDeclaration(
     val owner: ClassName,
-    val ownerKind: FunctionOwner,
+    val ownerKind: MemberOwner,
     val name: String,
     val annotation: AnnotationRef,
     val enhancements: List<Enhancement>,
@@ -67,10 +74,29 @@ internal data class FunctionDeclaration(
     val classAnnotations: List<AnnotationRef> = emptyList(),
 )
 
+/** A mutable property carrying an enhancement, such as `@Value`; the runtime sets it. */
+internal data class PropertyDeclaration(
+    val owner: ClassName,
+    val ownerKind: MemberOwner,
+    val name: String,
+    val annotation: AnnotationRef,
+    val enhancements: List<Enhancement>,
+    val annotations: List<AnnotationRef>,
+    val type: TypeDeclaration,
+    /** True when generated code in the plugin's package can assign the property directly. */
+    val reachable: Boolean,
+    val node: KSNode? = null,
+    /** The attributes written on the declaring class. */
+    val classAnnotations: List<AnnotationRef> = emptyList(),
+    /** The mutable property of the object the property holds that receives the value, when the property itself is not assigned. */
+    val via: String? = null,
+)
+
 internal data class DescriptorModel(
     val packageName: String,
     val beans: List<BeanDeclaration>,
     val functions: List<FunctionDeclaration> = emptyList(),
     val plugin: PluginDeclaration? = null,
     val subclasses: List<SubclassElement> = emptyList(),
+    val properties: List<PropertyDeclaration> = emptyList(),
 )
