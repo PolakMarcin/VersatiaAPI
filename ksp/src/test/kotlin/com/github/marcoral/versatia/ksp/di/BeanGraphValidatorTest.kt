@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp.di
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.ksp.model.AnnotationRef
@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 class BeanGraphValidatorTest {
     private val localBean = AnnotationRef(ClassName("com.github.marcoral.versatia.di", "LocalBean"))
-    private val local = listOf(Enhancement(BeanProcessors.LOCAL, EventType.PLUGIN_START_ONLY))
+    private val local = listOf(Enhancement(BeanProcessors.LOCAL, Phase.PLUGIN_START_ONLY))
 
     private fun type(name: String) = ClassName("com.example", name)
 
@@ -55,7 +55,7 @@ class BeanGraphValidatorTest {
         ownerKind = MemberOwner.PLUGIN,
         name = "start",
         annotation = AnnotationRef(ClassName("com.github.marcoral.versatia.lifecycle", "AutoInvoke")),
-        enhancements = listOf(Enhancement("com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor", EventType.PLUGIN_START_ONLY)),
+        enhancements = listOf(Enhancement("com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor", Phase.PLUGIN_START_ONLY)),
         annotations = emptyList(),
         parameters = parameters.toList(),
         reachable = true,
@@ -70,7 +70,7 @@ class BeanGraphValidatorTest {
         primary = false,
         annotations = emptyList(),
         assignableTypes = listOf(type("Main")) + types.map(::type),
-        enhancements = listOf(EnhancedAnnotation(AnnotationRef(type("PluginBean")), listOf(Enhancement(BeanProcessors.PLUGIN, EventType.PLUGIN_START_ONLY)), origin = type("VersatiaPlugin"))),
+        enhancements = listOf(EnhancedAnnotation(AnnotationRef(type("PluginBean")), listOf(Enhancement(BeanProcessors.PLUGIN, Phase.PLUGIN_START_ONLY)), origin = type("VersatiaPlugin"))),
     )
 
     private fun messages(
@@ -190,7 +190,7 @@ class BeanGraphValidatorTest {
 
     @Test
     fun `a prototype takes the plugin only as a type every plugin has`() {
-        val prototype = listOf(Enhancement(BeanProcessors.EXPOSE_PROTOTYPE, EventType.PLUGIN_START_ONLY))
+        val prototype = listOf(Enhancement(BeanProcessors.EXPOSE_PROTOTYPE, Phase.PLUGIN_START_ONLY))
         val plugin = mainPlugin("VersatiaPlugin", "Plugin")
         val pluginTypes = setOf(type("VersatiaPlugin"), type("Plugin"))
 

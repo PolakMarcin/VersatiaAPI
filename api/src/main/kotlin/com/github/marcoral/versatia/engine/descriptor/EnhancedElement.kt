@@ -1,11 +1,11 @@
 package com.github.marcoral.versatia.engine.descriptor
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 
 /** One recorded occurrence of an enhancement: who interprets it, when, what was annotated and where. */
 data class EnhancedElement(
     val processorClass: String,
-    val phase: EventType,
+    val phase: Phase,
     /** The enhancement annotation that produced the element, as written at [origin]. */
     val annotation: AnnotationOccurrence,
     val target: ElementTarget,

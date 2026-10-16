@@ -1,7 +1,8 @@
 package com.github.marcoral.versatia.config
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
+import com.github.marcoral.versatia.VersatiaInternalApi
 import com.github.marcoral.versatia.util.type.Percent
 import kotlin.reflect.KClass
 
@@ -23,7 +24,7 @@ import kotlin.reflect.KClass
  */
 @Target(AnnotationTarget.PROPERTY, AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.BINARY)
-@VersatiaEnhancement(ConfigProcessors.VALUE, enhancementPhase = EventType.PLUGIN_RELOAD_OR_START)
+@VersatiaEnhancement(ConfigProcessors.VALUE, enhancementPhase = Phase.PLUGIN_RELOAD_OR_START)
 annotation class Value(val key: String, val file: String = DEFAULT_FILE, val mapper: KClass<out ValueMapper<*>> = NoMapper::class) {
     companion object {
         /** The file a value is read from when none is named. */
@@ -32,6 +33,7 @@ annotation class Value(val key: String, val file: String = DEFAULT_FILE, val map
 }
 
 /** The VersatiaCore processors of this package, by name: the API does not see the runtime. */
+@VersatiaInternalApi
 object ConfigProcessors {
     const val VALUE = "com.github.marcoral.versatia.config.ValueEnhancementProcessor"
 }
@@ -44,6 +46,7 @@ object ConfigProcessors {
  * as single values only. A nullable type makes the value optional, and a
  * [PreviousValueTracking] of any of these types is read by the type it wraps.
  */
+@VersatiaInternalApi
 object ValueTypes {
     /** Read with the strict getters, as single values, as the values of maps and, through the strict list getters, as the elements of lists and sets. */
     val SCALARS = setOf(

@@ -54,7 +54,7 @@ The annotation itself points at its processor and says when it is processed:
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class LocalBean
 ```
 

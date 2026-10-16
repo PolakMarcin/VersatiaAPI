@@ -1,7 +1,8 @@
 package com.github.marcoral.versatia.di
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
+import com.github.marcoral.versatia.VersatiaInternalApi
 
 /**
  * Marks an annotation as a bean scope. Classes annotated with any such scope are analysed at
@@ -15,24 +16,25 @@ annotation class Bean
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class LocalBean
 
 /** One instance, shared with every plugin loaded afterward. */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement(BeanProcessors.EXPOSE_SINGLETON, enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement(BeanProcessors.EXPOSE_SINGLETON, enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class ExposeSingleton
 
 /** A fresh instance for every plugin loaded afterward that depends on it. */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement(BeanProcessors.EXPOSE_PROTOTYPE, enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement(BeanProcessors.EXPOSE_PROTOTYPE, enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class ExposePrototype
 
 /** The VersatiaCore processors of this package, by name: the API does not see the runtime. */
+@VersatiaInternalApi
 object BeanProcessors {
     const val LOCAL = "com.github.marcoral.versatia.di.LocalBeanEnhancementProcessor"
     const val EXPOSE_SINGLETON = "com.github.marcoral.versatia.di.ExposeSingletonEnhancementProcessor"

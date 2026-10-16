@@ -1,10 +1,13 @@
 package com.github.marcoral.versatia.engine.descriptor
 
+import com.github.marcoral.versatia.VersatiaInternalApi
+
 /**
  * Version of the descriptor format, independent of the library version. A major change breaks
  * compatibility, a minor change adds element kinds or fields that older runtimes do not know.
  * See docs/enhancements.md.
  */
+@VersatiaInternalApi
 data class DescriptorVersion(val major: Int, val minor: Int) : Comparable<DescriptorVersion> {
     init {
         require(major >= 0 && minor >= 0) { "Version components must not be negative: $this" }

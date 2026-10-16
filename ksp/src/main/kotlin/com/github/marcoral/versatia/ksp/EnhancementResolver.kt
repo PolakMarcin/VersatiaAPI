@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
 import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 import com.github.marcoral.versatia.ksp.model.Enhancement
@@ -9,7 +9,10 @@ import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSNode
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Origin
 import com.squareup.kotlinpoet.ksp.toClassName
@@ -24,7 +27,7 @@ internal class EnhancementResolver(private val reporter: Reporter) {
     private val containerName = "$enhancementName.Container"
     private val subclassName = VersatiaSubclassEnhancement::class.qualifiedName!!
     private val subclassContainerName = "$subclassName.Container"
-    private val eventTypeName = EventType::class.qualifiedName!!
+    private val phaseName = Phase::class.qualifiedName!!
 
     /** A visited annotation class together with the occurrence through which it was reached. */
     class Link(val declaration: KSClassDeclaration, val occurrence: KSAnnotation)
@@ -55,6 +58,19 @@ internal class EnhancementResolver(private val reporter: Reporter) {
 
     /** Whether any annotation on [annotated] is an enhancement. */
     fun isEnhanced(annotated: KSAnnotated) = annotated.annotations.any { isEnhancement(chainOf(it)) }
+
+    /**
+     * The nearest member of the plugin's sources that [member] overrides and that is enhanced too:
+     * both elements would reach the override through virtual dispatch, so it would run twice.
+     */
+    fun enhancedOverrideeOf(member: KSDeclaration) =
+        generateSequence(member.overridee()) { it.overridee() }.firstOrNull { it.containingFile != null && isEnhanced(it) }
+
+    private fun KSDeclaration.overridee() = when (this) {
+        is KSFunctionDeclaration -> findOverridee()
+        is KSPropertyDeclaration -> findOverridee()
+        else -> null
+    }
 
     /** The enhancement annotations on a function or property, each resolved; errors point at [member]. */
     fun memberEnhancementsOf(member: KSAnnotated) = member.annotations.mapNotNull { annotation ->
@@ -101,9 +117,9 @@ internal class EnhancementResolver(private val reporter: Reporter) {
             ?: return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement on $carrierName has no processorClass")
         val subclassOf = ((enhancement.argument("subclassOf") as? KSType)?.expanded()?.declaration as? KSClassDeclaration)
             ?: return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName names no class in subclassOf")
-        val phase = enhancement.argument("enhancementPhase").asEventType()
-        if (phase == EventType._NULL)
-            return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName must set enhancementPhase to a phase other than _NULL")
+        val phase = enhancement.argument("enhancementPhase").asPhase()
+        if (phase == Phase.UNSET)
+            return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName must set enhancementPhase to a phase other than UNSET")
         return SubclassEnhancement(processorClass, phase, subclassOf.toClassName())
     }
 
@@ -112,16 +128,16 @@ internal class EnhancementResolver(private val reporter: Reporter) {
         val carrierName = declaration.carrierName
         val reportAt = declaration.reportAt
         val processorClass = declaration.processorClass ?: return reporter.fail(reportAt, "@VersatiaEnhancement on $carrierName has no processorClass")
-        val fixedPhase = enhancement.argument("enhancementPhase").asEventType()
+        val fixedPhase = enhancement.argument("enhancementPhase").asPhase()
         val paramRef = enhancement.argument("enhancementPhaseParamRefName") as? String ?: ""
 
         val phase = when {
-            fixedPhase != EventType._NULL && paramRef.isNotEmpty() -> return reporter.fail(
+            fixedPhase != Phase.UNSET && paramRef.isNotEmpty() -> return reporter.fail(
                 reportAt,
                 "@VersatiaEnhancement(\"$processorClass\") on $carrierName sets both enhancementPhase and " +
                     "enhancementPhaseParamRefName; exactly one of them is required",
             )
-            fixedPhase != EventType._NULL -> fixedPhase
+            fixedPhase != Phase.UNSET -> fixedPhase
             paramRef.isEmpty() -> return reporter.fail(
                 reportAt,
                 "@VersatiaEnhancement(\"$processorClass\") on $carrierName declares no phase; set enhancementPhase " +
@@ -132,7 +148,7 @@ internal class EnhancementResolver(private val reporter: Reporter) {
         return Enhancement(processorClass, phase)
     }
 
-    private fun phaseFromProperty(carrier: Link, paramRef: String, processorClass: String, reportAt: KSNode): EventType? {
+    private fun phaseFromProperty(carrier: Link, paramRef: String, processorClass: String, reportAt: KSNode): Phase? {
         val carrierName = carrier.declaration.simpleName.asString()
         val property = carrier.declaration.getDeclaredProperties().firstOrNull { it.simpleName.asString() == paramRef }
             ?: return reporter.fail(
@@ -140,12 +156,12 @@ internal class EnhancementResolver(private val reporter: Reporter) {
                 "@VersatiaEnhancement(\"$processorClass\") on $carrierName refers to property \"$paramRef\", " +
                     "which $carrierName does not declare",
             )
-        if (property.type.resolve().expanded().declaration.qualifiedName?.asString() != eventTypeName)
-            return reporter.fail(reportAt, "Property \"$paramRef\" of $carrierName must be of type EventType to hold the phase")
-        val phase = carrier.occurrence.argument(paramRef).asEventType()
-        if (phase == EventType._NULL) return reporter.fail(
+        if (property.type.resolve().expanded().declaration.qualifiedName?.asString() != phaseName)
+            return reporter.fail(reportAt, "Property \"$paramRef\" of $carrierName must be of type Phase to hold the phase")
+        val phase = carrier.occurrence.argument(paramRef).asPhase()
+        if (phase == Phase.UNSET) return reporter.fail(
             carrier.occurrence,
-            "@$carrierName must set $paramRef to a phase other than _NULL; it decides when the enhancement runs",
+            "@$carrierName must set $paramRef to a phase other than UNSET; it decides when the enhancement runs",
         )
         return phase
     }
@@ -155,7 +171,7 @@ internal class EnhancementResolver(private val reporter: Reporter) {
         if (annotation.declaration()?.qualifiedName?.asString() != container) listOf(annotation)
         else (annotation.argument("value") as? List<*>).orEmpty().filterIsInstance<KSAnnotation>()
 
-    private fun Any?.asEventType() = enumEntryName(this).let { entryName -> EventType.entries.firstOrNull { it.name == entryName } } ?: EventType._NULL
+    private fun Any?.asPhase() = enumEntryName(this).let { entryName -> Phase.entries.firstOrNull { it.name == entryName } } ?: Phase.UNSET
 }
 
 /** The value written for [name], or its default. */

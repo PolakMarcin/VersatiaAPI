@@ -25,7 +25,7 @@ class AttributeProcessingTest : ProcessorTest() {
                 package com.example.alpha
 
                 import com.github.marcoral.versatia.ConditionalOnPlugin
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.FriendlyName
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.di.LocalBean
@@ -37,17 +37,17 @@ class AttributeProcessingTest : ProcessorTest() {
                 @ConditionalOnPlugin("Vault")
                 @LocalBean
                 class Bridge {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun connect() {}
                 }
 
                 @ConditionalOnPlugin("CommandAPI", "Vault")
                 object Hooks {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun hook() {}
 
                     @ConditionalOnPlugin("Essentials")
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun chat() {}
                 }
                 """,
@@ -80,7 +80,7 @@ class AttributeProcessingTest : ProcessorTest() {
                 package com.example.alpha
 
                 import com.github.marcoral.versatia.ConditionalOnPlugin
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.FriendlyName
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.di.LocalBean

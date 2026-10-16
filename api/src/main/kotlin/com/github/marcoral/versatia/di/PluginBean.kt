@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.di
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
 
 /**
@@ -12,5 +12,5 @@ import com.github.marcoral.versatia.VersatiaEnhancement
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
-@VersatiaEnhancement(BeanProcessors.PLUGIN, enhancementPhase = EventType.PLUGIN_RELOAD_OR_START)
+@VersatiaEnhancement(BeanProcessors.PLUGIN, enhancementPhase = Phase.PLUGIN_RELOAD_OR_START)
 annotation class PluginBean

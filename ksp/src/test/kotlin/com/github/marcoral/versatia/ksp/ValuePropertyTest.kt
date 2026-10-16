@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.config.ConfigProcessors
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
 import com.github.marcoral.versatia.engine.descriptor.MemberOwner
@@ -69,7 +69,7 @@ class ValuePropertyTest : ProcessorTest() {
             setOf("com.example.alpha.AlphaPlugin.motd", "com.example.alpha.AlphaPlugin.mode", "com.example.alpha.Limits.slots", "com.example.alpha.Limits.tax", "com.example.alpha.Shop.open"),
             properties.keys,
         )
-        assertTrue(elements.all { it.processorClass == ConfigProcessors.VALUE && it.phase == EventType.PLUGIN_RELOAD_OR_START })
+        assertTrue(elements.all { it.processorClass == ConfigProcessors.VALUE && it.phase == Phase.PLUGIN_RELOAD_OR_START })
         assertEquals(
             AnnotationOccurrence("com.github.marcoral.versatia.config.Value", mapOf("key" to "mode", "file" to "rules.yml", "mapper" to "com.github.marcoral.versatia.config.NoMapper")),
             elements.single { (it.target as PropertyTarget).propertyName == "mode" }.annotation,

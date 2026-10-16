@@ -18,5 +18,5 @@ annotation class VersatiaSubclassEnhancement(
     val processorClass: String,
     /** The type whose subclasses are enhanced; the type itself is skipped unless it is concrete. */
     val subclassOf: KClass<*>,
-    val enhancementPhase: EventType,
+    val enhancementPhase: Phase,
 )

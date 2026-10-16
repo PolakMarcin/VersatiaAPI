@@ -22,11 +22,11 @@ fun Plugin.runTaskLaterWithContext(delayTicks: Long, task: Consumer<in BukkitTas
 fun Plugin.runTaskLaterAsynchronously(delayTicks: Long, task: Runnable) = Bukkit.getScheduler().runTaskLaterAsynchronously(this, task, delayTicks)
 fun Plugin.runTaskLaterAsynchronouslyWithContext(delayTicks: Long, task: Consumer<in BukkitTask>) = Bukkit.getScheduler().runTaskLaterAsynchronously(this, task, delayTicks)
 
-fun Plugin.runTaskTimer(periodTicks: Long, delayTicks: Long = 0, task: Runnable) = Bukkit.getScheduler().runTaskTimer(this, task, delayTicks, periodTicks)
-fun Plugin.runTaskTimerWithContext(periodTicks: Long, delayTicks: Long = 0, task: Consumer<in BukkitTask>) = Bukkit.getScheduler().runTaskTimer(this, task, delayTicks, periodTicks)
+fun Plugin.runTaskTimer(delayTicks: Long = 0, periodTicks: Long, task: Runnable) = Bukkit.getScheduler().runTaskTimer(this, task, delayTicks, periodTicks)
+fun Plugin.runTaskTimerWithContext(delayTicks: Long = 0, periodTicks: Long, task: Consumer<in BukkitTask>) = Bukkit.getScheduler().runTaskTimer(this, task, delayTicks, periodTicks)
 
-fun Plugin.runTaskTimerAsynchronously(periodTicks: Long, delayTicks: Long = 0, task: Runnable) = Bukkit.getScheduler().runTaskTimerAsynchronously(this, task, delayTicks, periodTicks)
-fun Plugin.runTaskTimerAsynchronouslyWithContext(periodTicks: Long, delayTicks: Long = 0, task: Consumer<in BukkitTask>) = Bukkit.getScheduler().runTaskTimerAsynchronously(this, task, delayTicks, periodTicks)
+fun Plugin.runTaskTimerAsynchronously(delayTicks: Long = 0, periodTicks: Long, task: Runnable) = Bukkit.getScheduler().runTaskTimerAsynchronously(this, task, delayTicks, periodTicks)
+fun Plugin.runTaskTimerAsynchronouslyWithContext(delayTicks: Long = 0, periodTicks: Long, task: Consumer<in BukkitTask>) = Bukkit.getScheduler().runTaskTimerAsynchronously(this, task, delayTicks, periodTicks)
 
 fun <T> Plugin.callSyncMethod(task: Callable<T>): Future<T> = Bukkit.getScheduler().callSyncMethod(this, task)
 fun Plugin.cancelAllTasks() = Bukkit.getScheduler().cancelTasks(this)

@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
 import com.github.marcoral.versatia.engine.descriptor.ClassTarget
@@ -29,13 +29,13 @@ class PluginEnhancementTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.VersatiaPlugin
 
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
-                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = EventType.PLUGIN_STOP)
+                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = Phase.PLUGIN_STOP)
                 annotation class Audited(val channel: String)
 
                 @Audited("console")
@@ -49,7 +49,7 @@ class PluginEnhancementTest : ProcessorTest() {
 
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val audit = result.descriptor().elements.single { it.processorClass == "com.example.test.AuditEnhancementProcessor" }
-        assertEquals(EventType.PLUGIN_STOP, audit.phase)
+        assertEquals(Phase.PLUGIN_STOP, audit.phase)
         assertEquals(AnnotationOccurrence("com.example.alpha.Audited", mapOf("channel" to "console")), audit.annotation)
         assertEquals("com.example.alpha.AlphaPlugin", assertIs<PluginTarget>(audit.target).className)
     }
@@ -106,13 +106,13 @@ class PluginEnhancementTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.VersatiaPlugin
 
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
-                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = EventType.PLUGIN_STOP)
+                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = Phase.PLUGIN_STOP)
                 annotation class Audited(val channel: String)
 
                 @Audited("console")
@@ -222,7 +222,7 @@ class PluginEnhancementTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.VersatiaSubclassEnhancement
                 import com.github.marcoral.versatia.di.LocalBean
@@ -232,7 +232,7 @@ class PluginEnhancementTest : ProcessorTest() {
 
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
-                @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, EventType.PLUGIN_RELOAD_OR_START)
+                @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, Phase.PLUGIN_RELOAD_OR_START)
                 annotation class AuditSubclasses
 
                 @AuditSubclasses
@@ -260,7 +260,7 @@ class PluginEnhancementTest : ProcessorTest() {
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val audited = result.descriptor().elements.filter { it.processorClass == "com.example.test.AuditEnhancementProcessor" }
         assertEquals(listOf("com.example.alpha.AlphaPlugin", "com.example.alpha.Console", "com.example.alpha.Ledger", "com.example.alpha.Vault"), audited.map { it.target.className })
-        assertTrue(audited.all { it.phase == EventType.PLUGIN_RELOAD_OR_START })
+        assertTrue(audited.all { it.phase == Phase.PLUGIN_RELOAD_OR_START })
         assertTrue(audited.all { it.origin == "com.example.alpha.AuditedPlugin" }, "the origin is where @AuditSubclasses was written")
         assertTrue(audited.all { it.annotation == AnnotationOccurrence("com.example.alpha.AuditSubclasses") })
         assertIs<PluginTarget>(audited[0].target)
@@ -281,7 +281,7 @@ class PluginEnhancementTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 
@@ -289,7 +289,7 @@ class PluginEnhancementTest : ProcessorTest() {
 
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
-                @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, EventType.PLUGIN_START_ONLY)
+                @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, Phase.PLUGIN_START_ONLY)
                 annotation class AuditSubclasses
 
                 @AuditSubclasses
@@ -319,13 +319,13 @@ class PluginEnhancementTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.VersatiaPlugin
 
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
-                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = EventType.PLUGIN_STOP)
+                @VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = Phase.PLUGIN_STOP)
                 annotation class Audited
 
                 @Audited
@@ -348,7 +348,7 @@ class PluginEnhancementTest : ProcessorTest() {
         val audited = """
             package com.example.alpha
 
-            import com.github.marcoral.versatia.EventType
+            import com.github.marcoral.versatia.Phase
             import com.github.marcoral.versatia.VersatiaPlugin
             import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 
@@ -356,7 +356,7 @@ class PluginEnhancementTest : ProcessorTest() {
 
             @Target(AnnotationTarget.CLASS)
             @Retention(AnnotationRetention.BINARY)
-            @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, EventType.PLUGIN_START_ONLY)
+            @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, Phase.PLUGIN_START_ONLY)
             annotation class AuditSubclasses
 
             @AuditSubclasses
@@ -419,18 +419,18 @@ class PluginEnhancementTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 
                 interface Auditable
 
                 @Target(AnnotationTarget.CLASS) @Retention(AnnotationRetention.BINARY)
-                @VersatiaSubclassEnhancement("", Auditable::class, EventType.PLUGIN_START_ONLY)
+                @VersatiaSubclassEnhancement("", Auditable::class, Phase.PLUGIN_START_ONLY)
                 annotation class NoProcessor
 
                 @Target(AnnotationTarget.CLASS) @Retention(AnnotationRetention.BINARY)
-                @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, EventType._NULL)
+                @VersatiaSubclassEnhancement("com.example.test.AuditEnhancementProcessor", Auditable::class, Phase.UNSET)
                 annotation class NoPhase
 
                 @NoProcessor @NoPhase
@@ -442,6 +442,6 @@ class PluginEnhancementTest : ProcessorTest() {
 
         assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode)
         assertContains(result.messages, "@VersatiaSubclassEnhancement on NoProcessor has no processorClass")
-        assertContains(result.messages, "@VersatiaSubclassEnhancement(\"com.example.test.AuditEnhancementProcessor\") on NoPhase must set enhancementPhase to a phase other than _NULL")
+        assertContains(result.messages, "@VersatiaSubclassEnhancement(\"com.example.test.AuditEnhancementProcessor\") on NoPhase must set enhancementPhase to a phase other than UNSET")
     }
 }

@@ -3,7 +3,7 @@ package com.github.marcoral.versatia
 /**
  * Marks an annotation as an enhancement: names the processor that interprets its occurrences and
  * says when. Exactly one of [enhancementPhase] and [enhancementPhaseParamRefName] must be given;
- * `_NULL` and `""` stand for "not given". Repeat it to run several processors for one annotation.
+ * `UNSET` and `""` stand for "not given". Repeat it to run several processors for one annotation.
  * See docs/enhancements.md.
  */
 @Target(AnnotationTarget.ANNOTATION_CLASS)
@@ -17,8 +17,8 @@ annotation class VersatiaEnhancement(
      */
     val processorClass: String,
     /** Fixed phase for every occurrence of the annotation. */
-    val enhancementPhase: EventType = EventType._NULL,
-    /** Name of an `EventType` property of the annotated annotation that holds the phase per occurrence. */
+    val enhancementPhase: Phase = Phase.UNSET,
+    /** Name of a `Phase` property of the annotated annotation that holds the phase per occurrence. */
     val enhancementPhaseParamRefName: String = "",
 )
 

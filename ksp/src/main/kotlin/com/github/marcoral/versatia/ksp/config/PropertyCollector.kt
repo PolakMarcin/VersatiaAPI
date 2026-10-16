@@ -75,6 +75,9 @@ internal class PropertyCollector(
             return reporter.fail(property, "$name carries more than one enhancement: ${enhanced.joinToString { it.annotation.shortName.asString() }}")
         val single = enhanced.single()
         if (single.enhancements.isEmpty()) return null
+        enhancements.enhancedOverrideeOf(property)?.let {
+            return reporter.fail(property, "$name overrides ${it.displayName()}, which is enhanced too, so the override would run for both; keep the enhancement on one of them")
+        }
 
         val ownerKind = clazz.memberOwner(owners) ?: return reporter.fail(property, "$name cannot be enhanced: ${clazz.notAnOwner()}")
         val type = property.type.resolve().expanded()

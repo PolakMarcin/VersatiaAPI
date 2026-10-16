@@ -1,5 +1,6 @@
 package com.github.marcoral.versatia.config
 
+import com.github.marcoral.versatia.util.config.getConfigurationSectionOrThrow
 import org.bukkit.configuration.ConfigurationSection
 
 /**
@@ -13,6 +14,17 @@ import org.bukkit.configuration.ConfigurationSection
  */
 fun interface ValueMapper<out T> {
     fun map(section: ConfigurationSection, key: String): T
+}
+
+/**
+ * A [ValueMapper] for a value written as a section of its own, the usual shape of a data class:
+ * `object Mapper : SectionMapper<PriceRange>() { override fun map(section: ConfigurationSection) = PriceRange(...) }`.
+ * [map] receives that section; a key holding anything else is reported as not a section.
+ */
+abstract class SectionMapper<out T> : ValueMapper<T> {
+    abstract fun map(section: ConfigurationSection): T
+
+    final override fun map(section: ConfigurationSection, key: String) = map(section.getConfigurationSectionOrThrow(key))
 }
 
 /** Stands for "no mapper" in `@Value`, because annotations cannot hold `null`. */

@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp.testscopes
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
 import com.github.marcoral.versatia.di.Bean
 import com.github.marcoral.versatia.di.BeanProcessors
@@ -15,21 +15,21 @@ import com.github.marcoral.versatia.di.LocalBean
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = EventType.PLUGIN_START_ONLY)
-@VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = EventType.PLUGIN_STOP)
+@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = Phase.PLUGIN_START_ONLY)
+@VersatiaEnhancement("com.example.test.AuditEnhancementProcessor", enhancementPhase = Phase.PLUGIN_STOP)
 annotation class AuditedBean
 
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
 @VersatiaEnhancement("com.example.test.PhasedEnhancementProcessor", enhancementPhaseParamRefName = "phase")
-annotation class PhasedBean(val phase: EventType)
+annotation class PhasedBean(val phase: Phase)
 
 /** A broken scope without a source location: its errors point at the class that uses it. */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement("", enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement("", enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class BrokenBean
 
 /** A final class another plugin exposes, as it reaches a dependent plugin. */

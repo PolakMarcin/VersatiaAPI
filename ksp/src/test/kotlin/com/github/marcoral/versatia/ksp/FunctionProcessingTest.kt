@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
 import com.github.marcoral.versatia.engine.descriptor.FunctionTarget
 import com.github.marcoral.versatia.engine.descriptor.Invoker
@@ -29,7 +29,7 @@ class FunctionProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.di.LocalBean
                 import com.github.marcoral.versatia.lifecycle.AutoInvoke
@@ -38,21 +38,21 @@ class FunctionProcessingTest : ProcessorTest() {
                 class Clock
 
                 class AlphaPlugin : VersatiaPlugin() {
-                    @AutoInvoke(EventType.PLUGIN_RELOAD_OR_START)
+                    @AutoInvoke(Phase.PLUGIN_RELOAD_OR_START)
                     fun announce() {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     private fun warmUp(clock: Clock) {}
                 }
 
                 object Registry {
-                    @AutoInvoke(EventType.PLUGIN_STOP)
+                    @AutoInvoke(Phase.PLUGIN_STOP)
                     fun flush() {}
                 }
 
                 @LocalBean
                 class Banner(val clock: Clock) {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     internal fun show(clock: Clock) {}
                 }
                 """,
@@ -76,8 +76,8 @@ class FunctionProcessingTest : ProcessorTest() {
         assertEquals(MemberOwner.OBJECT, functions.getValue("com.example.alpha.Registry.flush").owner)
         assertEquals(MemberOwner.INSTANCE, functions.getValue("com.example.alpha.Banner.show").owner)
         val phases = elements.associate { (it.target as FunctionTarget).functionName to it.phase }
-        assertEquals(EventType.PLUGIN_RELOAD_OR_START, phases["announce"])
-        assertEquals(EventType.PLUGIN_STOP, phases["flush"])
+        assertEquals(Phase.PLUGIN_RELOAD_OR_START, phases["announce"])
+        assertEquals(Phase.PLUGIN_STOP, phases["flush"])
         assertEquals(
             AnnotationOccurrence("com.github.marcoral.versatia.lifecycle.AutoInvoke", mapOf("phase" to "PLUGIN_STOP")),
             elements.single { (it.target as FunctionTarget).functionName == "flush" }.annotation,
@@ -95,20 +95,20 @@ class FunctionProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.lifecycle.AutoInvoke
 
                 class AlphaPlugin : VersatiaPlugin() {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun generic(value: List<String>) {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun String.extension() {}
                 }
 
                 class Plain {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun nobody() {}
                 }
                 """,
@@ -132,7 +132,7 @@ class FunctionProcessingTest : ProcessorTest() {
                 package com.example.alpha
 
                 import com.github.marcoral.versatia.ConditionalOnPlugin
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.di.LocalBean
@@ -142,57 +142,57 @@ class FunctionProcessingTest : ProcessorTest() {
 
                 @Target(AnnotationTarget.FUNCTION)
                 @Retention(AnnotationRetention.BINARY)
-                @VersatiaEnhancement("com.example.test.TraceEnhancementProcessor", enhancementPhase = EventType.PLUGIN_STOP)
+                @VersatiaEnhancement("com.example.test.TraceEnhancementProcessor", enhancementPhase = Phase.PLUGIN_STOP)
                 annotation class Traced
 
                 @LocalBean
                 class Clock
 
-                @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                @AutoInvoke(Phase.PLUGIN_START_ONLY)
                 fun start() {}
 
                 @ConditionalOnPlugin("Vault")
-                @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                @AutoInvoke(Phase.PLUGIN_START_ONLY)
                 fun conditional() {}
 
                 abstract class BasePlugin : VersatiaPlugin() {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     abstract fun template()
                 }
 
                 class Main : BasePlugin() {
                     override fun template() {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     suspend fun later() {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun <T> generic() {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     @Traced
                     fun twice() {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun many(vararg clocks: Clock) {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun typed(callback: () -> Unit) {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun <T : Any> bound(value: T) {}
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun blank(@Qualifier(" ") clock: Clock) {}
 
                     companion object {
-                        @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                        @AutoInvoke(Phase.PLUGIN_START_ONLY)
                         fun inCompanion() {}
                     }
                 }
 
                 class Other : JavaPlugin() {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun notMain() {}
                 }
                 """,
@@ -226,12 +226,12 @@ class FunctionProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.lifecycle.AutoInvoke
 
                 abstract class BasePlugin : VersatiaPlugin() {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun baseStart() {}
                 }
 
@@ -240,10 +240,10 @@ class FunctionProcessingTest : ProcessorTest() {
                 private object Tasks {
                     val calls = mutableListOf<String>()
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     internal fun start(any: Any) { calls += "start ${'$'}any" }
 
-                    @AutoInvoke(EventType.PLUGIN_STOP)
+                    @AutoInvoke(Phase.PLUGIN_STOP)
                     @JvmName("finish")
                     fun stop() { calls += "stop" }
                 }
@@ -263,5 +263,54 @@ class FunctionProcessingTest : ProcessorTest() {
         start.invoke(result.classLoader, tasks, listOf("now"))
         functions.getValue("stop").invoker.invoke(result.classLoader, tasks, emptyList())
         assertEquals(listOf("start now", "stop"), tasks.javaClass.getDeclaredMethod("getCalls").apply { isAccessible = true }.invoke(tasks))
+    }
+
+    @Test
+    fun `rejects an enhanced member that overrides an enhanced member`() {
+        val result = compile(
+            SourceFile.kotlin(
+                "Overrides.kt",
+                """
+                package com.example.alpha
+
+                import com.github.marcoral.versatia.Phase
+                import com.github.marcoral.versatia.VersatiaPlugin
+                import com.github.marcoral.versatia.config.Value
+                import com.github.marcoral.versatia.lifecycle.AutoInvoke
+
+                abstract class BasePlugin : VersatiaPlugin() {
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
+                    open fun start() {}
+
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
+                    open fun stop() {}
+
+                    @Value("limit")
+                    open var limit = 0
+                }
+
+                abstract class MiddlePlugin : BasePlugin() {
+                    override fun stop() {}
+                }
+
+                class Main : MiddlePlugin() {
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
+                    override fun start() {}
+
+                    @AutoInvoke(Phase.PLUGIN_STOP)
+                    override fun stop() {}
+
+                    @Value("limit")
+                    override var limit = 1
+                }
+                """,
+            ),
+            mainClass = "com.example.alpha.Main",
+        )
+
+        assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode)
+        assertContains(result.messages, "Main.start overrides BasePlugin.start, which is enhanced too, so the override would run for both; keep the enhancement on one of them")
+        assertContains(result.messages, "Main.stop overrides BasePlugin.stop, which is enhanced too")
+        assertContains(result.messages, "Main.limit overrides BasePlugin.limit, which is enhanced too")
     }
 }

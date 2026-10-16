@@ -1,7 +1,8 @@
 package com.github.marcoral.versatia.resources
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
+import com.github.marcoral.versatia.VersatiaInternalApi
 
 /**
  * Copies every file under the [DIRECTORY] directory of the plugin's JAR (`src/main/resources/resources/`
@@ -13,7 +14,7 @@ import com.github.marcoral.versatia.VersatiaEnhancement
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
-@VersatiaEnhancement(ResourceProcessors.EXTRACT, enhancementPhase = EventType.PLUGIN_RELOAD_OR_START)
+@VersatiaEnhancement(ResourceProcessors.EXTRACT, enhancementPhase = Phase.PLUGIN_RELOAD_OR_START)
 annotation class ExtractResources {
     companion object {
         /** The classpath directory whose files are extracted. */
@@ -22,6 +23,7 @@ annotation class ExtractResources {
 }
 
 /** The VersatiaCore processors of this package, by name: the API does not see the runtime. */
+@VersatiaInternalApi
 object ResourceProcessors {
     const val EXTRACT = "com.github.marcoral.versatia.resources.ExtractResourcesEnhancementProcessor"
 }

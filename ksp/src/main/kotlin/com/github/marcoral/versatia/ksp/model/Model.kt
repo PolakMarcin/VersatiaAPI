@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp.model
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.ksp.di.BeanDeclaration
 import com.github.marcoral.versatia.ksp.di.PluginDeclaration
@@ -10,10 +10,10 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.TypeName
 
 /** One `@VersatiaEnhancement` resolved for a concrete occurrence: which processor, at which phase. */
-internal data class Enhancement(val processorClass: String, val phase: EventType)
+internal data class Enhancement(val processorClass: String, val phase: Phase)
 
 /** One `@VersatiaSubclassEnhancement`: which processor, at which phase, for the subclasses of which type. */
-internal data class SubclassEnhancement(val processorClass: String, val phase: EventType, val subclassOf: ClassName)
+internal data class SubclassEnhancement(val processorClass: String, val phase: Phase, val subclassOf: ClassName)
 
 /**
  * An enhancement annotation as written on the main class or one of its supertypes together with

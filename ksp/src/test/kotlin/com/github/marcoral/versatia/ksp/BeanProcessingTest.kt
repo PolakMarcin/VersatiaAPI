@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.di.PluginBean
 import com.github.marcoral.versatia.engine.descriptor.AnnotationOccurrence
@@ -121,7 +121,7 @@ class BeanProcessingTest : ProcessorTest() {
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val element = result.descriptor().elements.single { it.target is ClassTarget }
         assertEquals(BeanProcessors.LOCAL, element.processorClass)
-        assertEquals(EventType.PLUGIN_START_ONLY, element.phase)
+        assertEquals(Phase.PLUGIN_START_ONLY, element.phase)
         assertEquals(AnnotationOccurrence("com.example.alpha.Service"), element.annotation)
     }
 
@@ -133,7 +133,7 @@ class BeanProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.di.Bean
                 import com.github.marcoral.versatia.ksp.testscopes.PhasedBean
@@ -142,12 +142,12 @@ class BeanProcessingTest : ProcessorTest() {
                 @Retention(AnnotationRetention.BINARY)
                 @Bean
                 @VersatiaEnhancement("com.example.RunAtEnhancementProcessor", enhancementPhaseParamRefName = "at")
-                annotation class RunAt(val at: EventType, val note: String = "")
+                annotation class RunAt(val at: Phase, val note: String = "")
 
-                @RunAt(EventType.PLUGIN_STOP, note = "late")
+                @RunAt(Phase.PLUGIN_STOP, note = "late")
                 class FromSource
 
-                @PhasedBean(EventType.PLUGIN_RELOAD_ONLY)
+                @PhasedBean(Phase.PLUGIN_RELOAD_ONLY)
                 class FromClasspath
                 """,
             ),
@@ -155,8 +155,8 @@ class BeanProcessingTest : ProcessorTest() {
 
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val elements = result.descriptor().elements.filter { it.target is ClassTarget }.associateBy { (it.target as ClassTarget).className }
-        assertEquals(EventType.PLUGIN_STOP, elements.getValue("com.example.alpha.FromSource").phase)
-        assertEquals(EventType.PLUGIN_RELOAD_ONLY, elements.getValue("com.example.alpha.FromClasspath").phase)
+        assertEquals(Phase.PLUGIN_STOP, elements.getValue("com.example.alpha.FromSource").phase)
+        assertEquals(Phase.PLUGIN_RELOAD_ONLY, elements.getValue("com.example.alpha.FromClasspath").phase)
         assertEquals(
             AnnotationOccurrence("com.example.alpha.RunAt", mapOf("at" to "PLUGIN_STOP", "note" to "late")),
             elements.getValue("com.example.alpha.FromSource").annotation,
@@ -183,7 +183,7 @@ class BeanProcessingTest : ProcessorTest() {
         assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
         val elements = result.descriptor().elements.filter { it.target is ClassTarget }
         assertEquals(
-            setOf(BeanProcessors.LOCAL to EventType.PLUGIN_START_ONLY, "com.example.test.AuditEnhancementProcessor" to EventType.PLUGIN_STOP),
+            setOf(BeanProcessors.LOCAL to Phase.PLUGIN_START_ONLY, "com.example.test.AuditEnhancementProcessor" to Phase.PLUGIN_STOP),
             elements.map { it.processorClass to it.phase }.toSet(),
         )
         assertEquals(2, elements.size)
@@ -198,7 +198,7 @@ class BeanProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.di.Bean
 
@@ -207,24 +207,24 @@ class BeanProcessingTest : ProcessorTest() {
                 annotation class NoPhase
 
                 @Target(AnnotationTarget.CLASS) @Retention(AnnotationRetention.BINARY) @Bean
-                @VersatiaEnhancement("com.example.P", enhancementPhase = EventType.PLUGIN_START_ONLY, enhancementPhaseParamRefName = "at")
-                annotation class BothPhases(val at: EventType)
+                @VersatiaEnhancement("com.example.P", enhancementPhase = Phase.PLUGIN_START_ONLY, enhancementPhaseParamRefName = "at")
+                annotation class BothPhases(val at: Phase)
 
                 @Target(AnnotationTarget.CLASS) @Retention(AnnotationRetention.BINARY) @Bean
                 @VersatiaEnhancement("com.example.P", enhancementPhaseParamRefName = "missing")
-                annotation class MissingProperty(val at: EventType)
+                annotation class MissingProperty(val at: Phase)
 
                 @Target(AnnotationTarget.CLASS) @Retention(AnnotationRetention.BINARY) @Bean
                 @VersatiaEnhancement("com.example.P", enhancementPhaseParamRefName = "at")
                 annotation class WrongType(val at: String)
 
                 @Target(AnnotationTarget.CLASS) @Retention(AnnotationRetention.BINARY) @Bean
-                @VersatiaEnhancement("", enhancementPhase = EventType.PLUGIN_START_ONLY)
+                @VersatiaEnhancement("", enhancementPhase = Phase.PLUGIN_START_ONLY)
                 annotation class NoProcessor
 
                 @NoPhase class A
-                @BothPhases(EventType.PLUGIN_STOP) class B
-                @MissingProperty(EventType.PLUGIN_STOP) class C
+                @BothPhases(Phase.PLUGIN_STOP) class B
+                @MissingProperty(Phase.PLUGIN_STOP) class C
                 @WrongType("x") class D
                 @NoProcessor class E
                 """,
@@ -235,7 +235,7 @@ class BeanProcessingTest : ProcessorTest() {
         assertContains(result.messages, "on NoPhase declares no phase; set enhancementPhase or enhancementPhaseParamRefName")
         assertContains(result.messages, "on BothPhases sets both enhancementPhase and enhancementPhaseParamRefName")
         assertContains(result.messages, "on MissingProperty refers to property \"missing\", which MissingProperty does not declare")
-        assertContains(result.messages, "Property \"at\" of WrongType must be of type EventType")
+        assertContains(result.messages, "Property \"at\" of WrongType must be of type Phase")
         assertContains(result.messages, "@VersatiaEnhancement on NoProcessor has no processorClass")
         assertContains(result.messages, "Scopes.kt:")
     }
@@ -248,7 +248,7 @@ class BeanProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.di.Bean
                 import com.github.marcoral.versatia.di.BeanProcessors
@@ -256,7 +256,7 @@ class BeanProcessingTest : ProcessorTest() {
                 @Target(AnnotationTarget.CLASS)
                 @Retention(AnnotationRetention.BINARY)
                 @Bean
-                @VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = EventType.PLUGIN_STOP)
+                @VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = Phase.PLUGIN_STOP)
                 annotation class LateBean
 
                 @LateBean
@@ -303,7 +303,7 @@ class BeanProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaPlugin
                 import com.github.marcoral.versatia.di.LocalBean
                 import com.github.marcoral.versatia.di.Primary
@@ -325,7 +325,7 @@ class BeanProcessingTest : ProcessorTest() {
                 class ComplaintDesk(@Qualifier("grumpy") val greeter: Greeter)
 
                 class AlphaPlugin : VersatiaPlugin() {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun complain(@Qualifier("grumpy") greeter: Greeter) {}
                 }
                 """,
@@ -461,7 +461,7 @@ class BeanProcessingTest : ProcessorTest() {
         val elements = result.descriptor().elements
         val element = elements.first()
         assertEquals(BeanProcessors.PLUGIN, element.processorClass)
-        assertEquals(EventType.PLUGIN_RELOAD_OR_START, element.phase)
+        assertEquals(Phase.PLUGIN_RELOAD_OR_START, element.phase)
         assertEquals(AnnotationOccurrence(PluginBean::class.java.name), element.annotation, "inherited from VersatiaPlugin")
         assertEquals(ResourceProcessors.EXTRACT, elements[1].processorClass, "VersatiaPlugin's second enhancement")
         assertEquals(AnnotationOccurrence(ExtractResources::class.java.name), elements[1].annotation)
@@ -551,7 +551,7 @@ class BeanProcessingTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.di.ExposeSingleton
                 import com.github.marcoral.versatia.di.LocalBean
                 import com.github.marcoral.versatia.di.Qualifier
@@ -573,7 +573,7 @@ class BeanProcessingTest : ProcessorTest() {
 
                 @LocalBean
                 class Rejected(val shape: Shape?) {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun start() {}
                 }
                 """,
@@ -737,14 +737,14 @@ class BeanProcessingTest : ProcessorTest() {
     }
 
     @Test
-    fun `rejects an occurrence that leaves the referenced phase at _NULL`() {
+    fun `rejects an occurrence that leaves the referenced phase at UNSET`() {
         val result = compile(
             SourceFile.kotlin(
                 "Phased.kt",
                 """
                 package com.example.alpha
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.VersatiaEnhancement
                 import com.github.marcoral.versatia.di.Bean
 
@@ -752,15 +752,15 @@ class BeanProcessingTest : ProcessorTest() {
                 @Retention(AnnotationRetention.BINARY)
                 @Bean
                 @VersatiaEnhancement("com.example.RunAtEnhancementProcessor", enhancementPhaseParamRefName = "at")
-                annotation class RunAt(val at: EventType)
+                annotation class RunAt(val at: Phase)
 
-                @RunAt(EventType._NULL)
+                @RunAt(Phase.UNSET)
                 class Never
                 """,
             ),
         )
 
         assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode)
-        assertContains(result.messages, "@RunAt must set at to a phase other than _NULL; it decides when the enhancement runs")
+        assertContains(result.messages, "@RunAt must set at to a phase other than UNSET; it decides when the enhancement runs")
     }
 }

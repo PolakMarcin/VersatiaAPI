@@ -9,12 +9,18 @@ interface VersatiaEngine {
     val registry: PluginRegistry
 
     /** Runs the plugin's start-phase enhancements. */
+    @VersatiaInternalApi
     fun enhance(plugin: Plugin)
 
-    /** Runs the plugin's reload-phase enhancements; the state kept for it stays. */
+    /**
+     * Runs the plugin's reload-phase enhancements; the state kept for it stays. Once it succeeds,
+     * every running plugin holding beans the plugin exposes is reloaded too, once each and in start
+     * order, transitively; a failure of one of those is logged and undoes nothing.
+     */
     fun reload(plugin: Plugin)
 
     /** Runs the plugin's stop-phase enhancements and drops everything kept for it. */
+    @VersatiaInternalApi
     fun disable(plugin: Plugin)
 
     /**

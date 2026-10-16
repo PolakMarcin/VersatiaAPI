@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp.di
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.di.Bean
 import com.github.marcoral.versatia.di.BeanNames
 import com.github.marcoral.versatia.di.BeanProcessors
@@ -128,7 +128,7 @@ internal class BeanCollector(
                 reporter.fail(usage, "${declaration.simpleName.asString()} inherits @Bean but no @VersatiaEnhancement names its processor")
             return null
         }
-        resolved.firstOrNull { it.processorClass in BeanProcessors.SCOPES && it.phase != EventType.PLUGIN_START_ONLY }?.let {
+        resolved.firstOrNull { it.processorClass in BeanProcessors.SCOPES && it.phase != Phase.PLUGIN_START_ONLY }?.let {
             return reporter.fail(
                 usage,
                 "${declaration.simpleName.asString()} runs ${it.processorClass} at ${it.phase}; beans can only be declared at PLUGIN_START_ONLY",

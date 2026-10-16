@@ -11,7 +11,10 @@ import org.bukkit.entity.Player
 /** The running Versatia plugins by friendly name. A bean or an `@AutoInvoke` function takes [PluginRegistry] as a parameter instead. */
 val VersatiaEngine.Companion.registry get() = instance.registry
 
-/** Runs the reload event of the plugin registered as [friendlyName], as `/versatia reload <name>` does. A plugin reloads itself with [VersatiaPlugin.versatiaReload]. */
+/**
+ * Runs the reload event of the plugin registered as [friendlyName], and then of the plugins using its beans, as
+ * `/versatia reload <name>` does; see [VersatiaEngine.reload]. A plugin reloads itself with [VersatiaPlugin.versatiaReload].
+ */
 fun VersatiaEngine.Companion.reload(friendlyName: String) = with(instance) { reload(registry.getOrThrow(friendlyName)) }
 
 /* PLAYERS AND WORLDS */

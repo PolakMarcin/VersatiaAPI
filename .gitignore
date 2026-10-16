@@ -29,3 +29,6 @@ Desktop.ini
 hs_err_pid*
 *.hprof
 replay_pid*
+
+# Machine-specific settings (template: local.properties.example)
+local.properties

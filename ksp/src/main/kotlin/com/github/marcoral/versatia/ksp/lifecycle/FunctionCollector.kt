@@ -49,6 +49,9 @@ internal class FunctionCollector(
             return reporter.fail(function, "$name carries more than one enhancement: ${enhanced.joinToString { it.annotation.shortName.asString() }}")
         val single = enhanced.single()
         if (single.enhancements.isEmpty()) return null
+        enhancements.enhancedOverrideeOf(function)?.let {
+            return reporter.fail(function, "$name overrides ${it.displayName()}, which is enhanced too, so the override would run for both; keep the enhancement on one of them")
+        }
 
         val ownerKind = clazz.memberOwner(owners) ?: return reporter.fail(function, "$name cannot be enhanced: ${clazz.notAnOwner()}")
         when {

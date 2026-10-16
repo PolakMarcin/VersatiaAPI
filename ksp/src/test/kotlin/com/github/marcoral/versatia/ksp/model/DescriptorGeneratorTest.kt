@@ -1,6 +1,6 @@
 package com.github.marcoral.versatia.ksp.model
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.di.BeanProcessors
 import com.github.marcoral.versatia.engine.descriptor.MemberOwner
 import com.github.marcoral.versatia.engine.descriptor.VersatiaPluginDescriptor
@@ -18,7 +18,7 @@ class DescriptorGeneratorTest {
     private val exposeSingleton = AnnotationRef(ClassName("com.github.marcoral.versatia.di", "ExposeSingleton"))
     private val localBean = AnnotationRef(ClassName("com.github.marcoral.versatia.di", "LocalBean"))
     private val primary = AnnotationRef(ClassName("com.github.marcoral.versatia.di", "Primary"))
-    private val local = listOf(Enhancement(BeanProcessors.LOCAL, EventType.PLUGIN_START_ONLY))
+    private val local = listOf(Enhancement(BeanProcessors.LOCAL, Phase.PLUGIN_START_ONLY))
     private val clock = ClassName("com.example", "Clock")
 
     private fun bean(
@@ -47,13 +47,13 @@ class DescriptorGeneratorTest {
     private fun function(owner: String, name: String, kind: MemberOwner, reachable: Boolean, vararg parameters: ParameterDeclaration, jvmName: String = name) =
         FunctionDeclaration(
             ClassName("com.example", owner), kind, name, AnnotationRef(ClassName("com.github.marcoral.versatia.lifecycle", "AutoInvoke"), mapOf("phase" to "PLUGIN_START_ONLY")),
-            listOf(Enhancement("com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor", EventType.PLUGIN_START_ONLY)),
+            listOf(Enhancement("com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor", Phase.PLUGIN_START_ONLY)),
             emptyList(), parameters.toList(), reachable, jvmName = jvmName,
         )
 
     private fun property(owner: String, name: String, kind: MemberOwner, type: TypeDeclaration, reachable: Boolean) = PropertyDeclaration(
         ClassName("com.example", owner), kind, name, AnnotationRef(ClassName("com.github.marcoral.versatia.config", "Value"), mapOf("key" to "shop.$name", "file" to "config.yml")),
-        listOf(Enhancement("com.github.marcoral.versatia.config.ValueEnhancementProcessor", EventType.PLUGIN_RELOAD_OR_START)),
+        listOf(Enhancement("com.github.marcoral.versatia.config.ValueEnhancementProcessor", Phase.PLUGIN_RELOAD_OR_START)),
         emptyList(), type, reachable,
     )
 
@@ -90,7 +90,7 @@ class DescriptorGeneratorTest {
     fun `calls the constructor directly for reachable classes`() {
         val bean = bean(
             ClassName("com.example", "ConsoleGreeter"),
-            enhancements = listOf(Enhancement(BeanProcessors.EXPOSE_SINGLETON, EventType.PLUGIN_START_ONLY)),
+            enhancements = listOf(Enhancement(BeanProcessors.EXPOSE_SINGLETON, Phase.PLUGIN_START_ONLY)),
             parameters = listOf(ParameterDeclaration(clock)),
             provides = listOf(ClassName("com.example", "Greeter")),
             primary = true,
@@ -101,7 +101,7 @@ class DescriptorGeneratorTest {
         val code = code(DescriptorModel("com.example", listOf(bean)))
 
         assertContains(code, "processorClass = \"com.github.marcoral.versatia.di.ExposeSingletonEnhancementProcessor\"")
-        assertContains(code, "phase = EventType.PLUGIN_START_ONLY")
+        assertContains(code, "phase = Phase.PLUGIN_START_ONLY")
         assertContains(code, "annotation = AnnotationOccurrence(\"com.github.marcoral.versatia.di.ExposeSingleton\")")
         assertContains(code, "className = \"com.example.ConsoleGreeter\"")
         assertContains(code, "assignableTypes = listOf(\"com.example.ConsoleGreeter\", \"com.example.Greeter\")")
@@ -190,14 +190,14 @@ class DescriptorGeneratorTest {
     @Test
     fun `emits one element per enhancement of a class`() {
         val enhancements = listOf(
-            Enhancement(BeanProcessors.LOCAL, EventType.PLUGIN_START_ONLY),
-            Enhancement("com.example.AuditEnhancementProcessor", EventType.PLUGIN_STOP),
+            Enhancement(BeanProcessors.LOCAL, Phase.PLUGIN_START_ONLY),
+            Enhancement("com.example.AuditEnhancementProcessor", Phase.PLUGIN_STOP),
         )
         val code = code(DescriptorModel("com.example", listOf(bean(clock, enhancements))))
 
         assertEquals(2, Regex("EnhancedElement\\(").findAll(code).count())
         assertContains(code, "processorClass = \"com.example.AuditEnhancementProcessor\"")
-        assertContains(code, "phase = EventType.PLUGIN_STOP")
+        assertContains(code, "phase = Phase.PLUGIN_STOP")
     }
 
     @Test
@@ -229,8 +229,8 @@ class DescriptorGeneratorTest {
     @Test
     fun `emits one element per enhancement of the main class, sharing one target`() {
         val plugin = plugin(
-            EnhancedAnnotation(AnnotationRef(ClassName("com.github.marcoral.versatia.di", "PluginBean")), listOf(Enhancement(BeanProcessors.PLUGIN, EventType.PLUGIN_START_ONLY)), origin = ClassName("com.github.marcoral.versatia", "VersatiaPlugin")),
-            EnhancedAnnotation(AnnotationRef(ClassName("com.example", "Audited")), listOf(Enhancement("com.example.AuditEnhancementProcessor", EventType.PLUGIN_STOP)), origin = ClassName("com.example", "MyPlugin")),
+            EnhancedAnnotation(AnnotationRef(ClassName("com.github.marcoral.versatia.di", "PluginBean")), listOf(Enhancement(BeanProcessors.PLUGIN, Phase.PLUGIN_START_ONLY)), origin = ClassName("com.github.marcoral.versatia", "VersatiaPlugin")),
+            EnhancedAnnotation(AnnotationRef(ClassName("com.example", "Audited")), listOf(Enhancement("com.example.AuditEnhancementProcessor", Phase.PLUGIN_STOP)), origin = ClassName("com.example", "MyPlugin")),
         )
 
         val code = code(DescriptorModel("com.example", listOf(bean(clock)), plugin = plugin))
@@ -239,7 +239,7 @@ class DescriptorGeneratorTest {
         assertContains(code, "annotation = AnnotationOccurrence(\"com.github.marcoral.versatia.di.PluginBean\")")
         assertContains(code, "origin = \"com.github.marcoral.versatia.VersatiaPlugin\"")
         assertContains(code, "processorClass = \"com.example.AuditEnhancementProcessor\"")
-        assertContains(code, "phase = EventType.PLUGIN_STOP")
+        assertContains(code, "phase = Phase.PLUGIN_STOP")
         assertContains(code, "annotation = AnnotationOccurrence(\"com.example.Audited\")")
         assertEquals(2, Regex("target = pluginTarget\\(\\)").findAll(code).count())
         assertEquals(1, Regex("PluginTarget\\(").findAll(code).count(), "the target is written once")
@@ -259,7 +259,7 @@ class DescriptorGeneratorTest {
     @Test
     fun `emits subclass elements with their origin`() {
         val audit = AnnotationRef(ClassName("com.example", "AuditSubclasses"))
-        val enhancement = Enhancement("com.example.AuditEnhancementProcessor", EventType.PLUGIN_START_ONLY)
+        val enhancement = Enhancement("com.example.AuditEnhancementProcessor", Phase.PLUGIN_START_ONLY)
         val origin = ClassName("com.example", "AuditedPlugin")
         val subclasses = listOf(
             SubclassElement(origin, audit, enhancement, null),
@@ -309,7 +309,7 @@ class DescriptorGeneratorTest {
     fun `lists properties before functions`() {
         val property = PropertyDeclaration(
             ClassName("com.example", "Main"), MemberOwner.PLUGIN, "motd", AnnotationRef(ClassName("com.github.marcoral.versatia.config", "Value")),
-            listOf(Enhancement("com.example.P", EventType.PLUGIN_RELOAD_OR_START)), emptyList(), TypeDeclaration(ClassName("kotlin", "String")), reachable = true,
+            listOf(Enhancement("com.example.P", Phase.PLUGIN_RELOAD_OR_START)), emptyList(), TypeDeclaration(ClassName("kotlin", "String")), reachable = true,
         )
 
         val code = code(DescriptorModel("com.example", emptyList(), functions = listOf(function("Main", "start", MemberOwner.PLUGIN, reachable = true)), properties = listOf(property)))

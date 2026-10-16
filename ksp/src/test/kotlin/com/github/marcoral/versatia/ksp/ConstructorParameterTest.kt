@@ -154,12 +154,12 @@ class ConstructorParameterTest : ProcessorTest() {
                 import com.github.marcoral.versatia.config.Value
                 import com.github.marcoral.versatia.di.LocalBean
                 import com.github.marcoral.versatia.lifecycle.AutoInvoke
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import java.util.Date
 
                 @LocalBean
                 class Shop(@Value("a") val fixed: Int, @Value("b") plain: Int, @Value("c") var date: Date) {
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun start(@Value("d") count: Int) = Unit
                 }
 

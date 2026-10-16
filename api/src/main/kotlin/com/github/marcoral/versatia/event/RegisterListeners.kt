@@ -1,6 +1,7 @@
 package com.github.marcoral.versatia.event
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
+import com.github.marcoral.versatia.VersatiaInternalApi
 import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 import org.bukkit.event.Listener
 
@@ -14,10 +15,11 @@ import org.bukkit.event.Listener
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
-@VersatiaSubclassEnhancement(EventProcessors.REGISTER_LISTENERS, Listener::class, EventType.PLUGIN_START_ONLY)
+@VersatiaSubclassEnhancement(EventProcessors.REGISTER_LISTENERS, Listener::class, Phase.PLUGIN_START_ONLY)
 annotation class RegisterListeners
 
 /** The VersatiaCore processors of this package, by name: the API does not see the runtime. */
+@VersatiaInternalApi
 object EventProcessors {
     const val REGISTER_LISTENERS = "com.github.marcoral.versatia.event.RegisterListenersEnhancementProcessor"
 }

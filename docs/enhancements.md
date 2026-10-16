@@ -53,7 +53,7 @@ interprets them. VersatiaCore only reads the descriptor and hands each processor
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 @Bean
-@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class LocalBean
 ```
 
@@ -74,7 +74,7 @@ element carries
 | Field            | Meaning                                                                   |
 |------------------|---------------------------------------------------------------------------|
 | `processorClass` | the processor that interprets it                                          |
-| `phase`          | the `EventType` at which it runs; see [Phases](#phases)                   |
+| `phase`          | the `Phase` at which it runs; see [Phases](#phases)                       |
 | `annotation`     | the enhancement annotation that produced it, with its arguments           |
 | `target`         | what was annotated                                                        |
 | `origin`         | the class the annotation is physically written on: the target's own class, a base class of the main class for inherited enhancements, the class carrying a `@VersatiaSubclassEnhancement` for the elements it produces |
@@ -106,7 +106,7 @@ walk it. Changing how VersatiaCore iterates therefore never requires regeneratin
 ### Format version
 
 The format has its own `major.minor` version (`VersatiaPluginDescriptor.FORMAT_VERSION`, currently
-`1.2`), independent of the library version. A runtime accepts exactly the version it was built
+`1.3`), independent of the library version. A runtime accepts exactly the version it was built
 with and rejects any other with a message naming the plugin, both versions and the fix. The
 generator writes the two numbers as literal `Int` properties (`formatMajor`, `formatMinor`), so a
 runtime can read them from any descriptor before deciding what to do with it; for the same reason
@@ -146,20 +146,20 @@ Encapsulation is preserved: beans, their constructors, functions and their param
 
 ```kotlin
 // Fixed for every occurrence
-@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = EventType.PLUGIN_START_ONLY)
+@VersatiaEnhancement(BeanProcessors.LOCAL, enhancementPhase = Phase.PLUGIN_START_ONLY)
 annotation class LocalBean
 
 // Chosen per occurrence through a property of the annotation
 @VersatiaEnhancement(LifecycleProcessors.AUTO_INVOKE, enhancementPhaseParamRefName = "phase")
-annotation class AutoInvoke(val phase: EventType)
+annotation class AutoInvoke(val phase: Phase)
 
-@AutoInvoke(EventType.PLUGIN_RELOAD_OR_START)
+@AutoInvoke(Phase.PLUGIN_RELOAD_OR_START)
 fun start()
 ```
 
-`EventType._NULL` and `""` are the defaults and mean "not given"; annotations cannot hold `null`.
+`Phase.UNSET` and `""` are the defaults and mean "not given"; annotations cannot hold `null`.
 With `enhancementPhaseParamRefName`, the named property must exist on the annotated annotation and
-be of type `EventType`, and every occurrence must set it to something other than `_NULL`. When
+be of type `Phase`, and every occurrence must set it to something other than `UNSET`. When
 another annotation inherits such an enhancement by carrying it, the value is read from the
 occurrence that links the two, that is from the enhancement annotation as written on the
 declaration of the inheriting annotation. A fixed phase, as on `@LocalBean`, is the same for every
@@ -167,10 +167,10 @@ annotation inheriting it.
 
 The processor stops the build when a `@VersatiaEnhancement` sets both or neither, names a property
 the annotation does not declare, names one of another type, leaves `processorClass` empty, or an
-occurrence leaves the phase at `_NULL`. Errors point at the annotation declaration when it is in
+occurrence leaves the phase at `UNSET`. Errors point at the annotation declaration when it is in
 the sources, otherwise at the class using it.
 
-| `EventType`              | Runs at                          |
+| `Phase`                  | Runs at                          |
 |--------------------------|----------------------------------|
 | `PLUGIN_START_ONLY`      | plugin enable                    |
 | `PLUGIN_RELOAD_ONLY`     | `/versatia reload`, `plugin.versatiaReload()`, `VersatiaEngine.reload(name)` |
@@ -218,7 +218,13 @@ can only be declared when the plugin starts.
 
 `BeanResolver` (`di`) is the contract through which any processor injects: `resolve` turns a
 function's `Parameter`s into arguments with the rules below, `instanceOf` returns the bean of a
-class. The DI processors publish it in the plugin state under `BeanResolver.KEY`, and
+class. A processor that prepares beans itself has three more calls: `supply(class, index) { ... }`
+for a supplied constructor parameter, called for every instance the constructor makes;
+`onInstanceCreated(class) { instance -> }`, run right after the constructor of every instance of
+the class, at once on those that exist (false when the class is no bean of the plugin); and
+`instancesOf(class)`, the live instances without creating any. For an `@ExposePrototype` the
+instances include those made for other plugins, so a processor reaches every copy of the
+plugin's class, wherever it lives. The DI processors publish it in the plugin state under `BeanResolver.KEY`, and
 `@AutoInvoke` is its first client; a processor shipped by another plugin uses it the same way.
 
 Beans use constructor injection only. A dependency is matched against the *assignable types* of
@@ -227,8 +233,8 @@ constructor parameter with a default value is optional: when no bean, local or e
 its type, `resolve` returns `DefaultArgument` and the parameter keeps its default; when one does,
 it is injected. This holds for listeners and other classes the runtime creates as well; a function
 parameter is always required. A `@Value` constructor property is not a dependency at all: its
-`Parameter` names the `@Value` processor in `suppliedBy`, which hands the value to
-`BeanResolver.supply` before the beans are created (see [Configuration values](#configuration-values)).
+`Parameter` names the `@Value` processor in `suppliedBy`, which hands a function returning the
+current value to `BeanResolver.supply` before the beans are created (see [Configuration values](#configuration-values)).
 
 ### Reloadable beans
 
@@ -353,15 +359,17 @@ private class HiddenAudit(@Qualifier("consoleGreeter") val greeter: Greeter, val
 Generated for it (shortened):
 
 ```kotlin
+@file:OptIn(VersatiaInternalApi::class)
+
 object VersatiaDescriptor : VersatiaPluginDescriptor {
   override val formatMajor: Int = 1
-  override val formatMinor: Int = 1
+  override val formatMinor: Int = 3
 
   override val elements: List<EnhancedElement>
     get() = listOf(
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.PluginBeanEnhancementProcessor",
-        phase = EventType.PLUGIN_RELOAD_OR_START,
+        phase = Phase.PLUGIN_RELOAD_OR_START,
         annotation = AnnotationOccurrence("com.github.marcoral.versatia.di.PluginBean"),
         target = PluginTarget(
           className = "com.example.alpha.AlphaPlugin",
@@ -372,14 +380,14 @@ object VersatiaDescriptor : VersatiaPluginDescriptor {
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.resources.ExtractResourcesEnhancementProcessor",
-        phase = EventType.PLUGIN_START_ONLY,
+        phase = Phase.PLUGIN_START_ONLY,
         annotation = AnnotationOccurrence("com.github.marcoral.versatia.resources.ExtractResources"),
         target = PluginTarget(/* the same */),
         origin = "com.github.marcoral.versatia.VersatiaPlugin",
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.LocalBeanEnhancementProcessor",
-        phase = EventType.PLUGIN_START_ONLY,
+        phase = Phase.PLUGIN_START_ONLY,
         annotation = AnnotationOccurrence("com.github.marcoral.versatia.di.LocalBean"),
         target = ClassTarget(
           className = "com.example.alpha.ConsoleGreeter",
@@ -392,7 +400,7 @@ object VersatiaDescriptor : VersatiaPluginDescriptor {
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.LocalBeanEnhancementProcessor",
-        phase = EventType.PLUGIN_START_ONLY,
+        phase = Phase.PLUGIN_START_ONLY,
         annotation = AnnotationOccurrence("com.github.marcoral.versatia.di.LocalBean"),
         target = ClassTarget(
           className = "com.example.alpha.HiddenAudit",
@@ -440,7 +448,7 @@ generates nothing when any of them fires:
 - a class matched by a subclass enhancement that is inner, generic, an enum class or a companion
   object, or whose constructor parameters are not injectable;
 - a `@VersatiaSubclassEnhancement` without `processorClass`, without a class in `subclassOf`, or
-  with its phase left at `_NULL`;
+  with its phase left at `UNSET`;
 - an enhanced function or property carrying more than one enhancement, and an enhanced top-level
   function, which has no owner to call it on;
 - an enhanced property that is a `val` (other than one holding a `PreviousValueTracking`), an
@@ -453,8 +461,9 @@ generates nothing when any of them fires:
 - a `@VersatiaEnhancement` without `processorClass` or whose phase is not declared exactly once
   (see [Phases](#phases));
 - `@FriendlyName` off the main class or not one word, and `@ConditionalOnPlugin` where it would
-  have no effect (see [Conditional elements](#conditional-elements)).
-
+  have no effect (see [Conditional elements](#conditional-elements));
+- an enhanced function or property that overrides an enhanced one of the plugin's sources: the
+  element of the base member reaches the override through virtual dispatch, so it would run twice;
 - a dependency all of whose local providers `@ConditionalOnPlugin` may skip, from a bean, function
   or class whose own conditions (its own and those of its declaring class) do not include the same
   plugins: `X depends on Y, which exists only with @ConditionalOnPlugin("Vault"); make X conditional
@@ -483,10 +492,10 @@ to override.
 
 ```kotlin
 class MyPlugin : VersatiaPlugin() {
-    @AutoInvoke(EventType.PLUGIN_RELOAD_OR_START)
+    @AutoInvoke(Phase.PLUGIN_RELOAD_OR_START)
     private fun start(clock: Clock) { ... }
 
-    @AutoInvoke(EventType.PLUGIN_STOP)
+    @AutoInvoke(Phase.PLUGIN_STOP)
     fun stop() { ... }
 }
 ```
@@ -540,7 +549,9 @@ class Shop {
   because the compile-time step has no Paper API on its classpath.
 - With a mapper the property may have any type: a `ValueMapper<T>` (`config`) is an `object` or a
   class with a no-argument constructor whose `map(section, key)` reads the value with the strict
-  getters and returns `T`; the compile-time step checks that the property can hold `T`. `NoMapper`
+  getters and returns `T`; the compile-time step checks that the property can hold `T`, following
+  type parameters through base classes. `SectionMapper<T>` is the base for a value written as a
+  section of its own: its `map(section)` receives that section. `NoMapper`
   is the annotation's default, since annotations cannot hold `null`. `ksp.config.ValueTypeCheck`
   does both checks and names the supported types in its messages.
 - There is no default in the annotation: the shipped file holds the defaults, and a missing
@@ -568,7 +579,17 @@ class Shop {
   reflective; the mapper is recorded as the annotation's `mapper` argument, by class name.
   `ValueEnhancementProcessor` (`ConfigProcessors.VALUE`) works in `process` itself, so the values
   are set before the reloadable beans reload and before the functions run; the generator lists
-  property elements after the bean elements, so the beans are declared by then. `Setter.Reflective`
+  property elements after the bean elements, so the beans are declared by then. At start it sets
+  the properties of the main class and of objects before any bean exists, so a bean constructor
+  may read them; the properties of beans go to every instance through the `BeanResolver`, the
+  plugin's own and each one its prototype makes for another plugin, from the owner's files:
+  constructor values through `supply` (a new cell per instance for a tracked one), body values
+  through `onInstanceCreated`, with the values last read, so an instance made after a reload
+  starts with that reload's values. At a reload they are set on every instance `instancesOf`
+  lists, and the runtime then reloads the plugins holding instances of those classes or of the
+  owner's beans that take one through their constructors, transitively (and only those: a
+  consumer of the owner's beans without values is not reloaded). `Setter.Reflective`
+
   sets through `util.reflect`, which handles the static fields of objects and inline classes
   such as `Percent`.
 
@@ -611,7 +632,7 @@ on the main class or on a base class of it, follows the lineage rules above (nea
 ```kotlin
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
-@VersatiaSubclassEnhancement("com.example.audit.AuditEnhancementProcessor", Auditable::class, EventType.PLUGIN_START_ONLY)
+@VersatiaSubclassEnhancement("com.example.audit.AuditEnhancementProcessor", Auditable::class, Phase.PLUGIN_START_ONLY)
 annotation class AuditSubclasses
 
 @AuditSubclasses

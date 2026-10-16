@@ -1,7 +1,8 @@
 package com.github.marcoral.versatia.lifecycle
 
-import com.github.marcoral.versatia.EventType
+import com.github.marcoral.versatia.Phase
 import com.github.marcoral.versatia.VersatiaEnhancement
+import com.github.marcoral.versatia.VersatiaInternalApi
 
 /**
  * Calls the annotated function at [phase]. Parameters are injected like bean dependencies. The
@@ -10,9 +11,10 @@ import com.github.marcoral.versatia.VersatiaEnhancement
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.BINARY)
 @VersatiaEnhancement(LifecycleProcessors.AUTO_INVOKE, enhancementPhaseParamRefName = "phase")
-annotation class AutoInvoke(val phase: EventType)
+annotation class AutoInvoke(val phase: Phase)
 
 /** The VersatiaCore processors of this package, by name: the API does not see the runtime. */
+@VersatiaInternalApi
 object LifecycleProcessors {
     const val AUTO_INVOKE = "com.github.marcoral.versatia.lifecycle.AutoInvokeEnhancementProcessor"
 }

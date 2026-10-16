@@ -18,11 +18,11 @@ that deliver no feature of their own but are needed for the framework to work.
 
 | Package                  | Contents                                                                  |
 |--------------------------|---------------------------------------------------------------------------|
-| `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `@VersatiaSubclassEnhancement`, `EnhancementProcessor`, `EnhancementContext` with its `classLoader` extension, `StateStore`, `StateKey`, `EventType`, `LifecycleEvent`, `EnhancementException`, `@VersatiaDisabler`), the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`, `@DisableVersatiaFeatures`) and the attributes the runtime reads itself (`@ConditionalOnPlugin`, `@FriendlyName`, with `PluginRegistry` reading friendly names back); the static shortcuts on `VersatiaEngine` (`VersatiaEngineExtensions.kt`) and `ServiceNotRegisteredException` |
+| `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `@VersatiaSubclassEnhancement`, `EnhancementProcessor`, `EnhancementContext` with its `classLoader` extension, `StateStore`, `StateKey`, `Phase`, `LifecycleEvent`, `EnhancementException`, `@VersatiaDisabler`, `@VersatiaInternalApi`), the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`, `@DisableVersatiaFeatures`) and the attributes the runtime reads itself (`@ConditionalOnPlugin`, `@FriendlyName`, with `PluginRegistry` reading friendly names back); the static shortcuts on `VersatiaEngine` (`VersatiaEngineExtensions.kt`) and `ServiceNotRegisteredException` |
 | `engine.descriptor`      | Model of the generated descriptor: `VersatiaPluginDescriptor`, `EnhancedElement`, `AnnotationOccurrence`, `ClassTarget`, `FunctionTarget`, `PropertyTarget`, `PluginTarget`, `MemberOwner`, `Parameter`, `TypeReference`, `Instantiator` with `DefaultArgument`, `Invoker`, `Setter`, `DescriptorVersion` |
 | `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@PluginBean`; `@Qualifier`, `@Primary`; `Reloadable`, beans reloaded with their plugin; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
 | `lifecycle`              | `@AutoInvoke`, functions called at a lifecycle phase; `LifecycleProcessors` |
-| `config`                 | `@Value`, properties set from the plugin's YAML files at start and reload; `ValueTypes`, the types it reads by itself; `ValueMapper` and `NoMapper` for any other; `PreviousValueTracking`, a cell keeping the value it replaced; `ConfigProcessors` |
+| `config`                 | `@Value`, properties set from the plugin's YAML files at start and reload; `ValueTypes`, the types it reads by itself; `ValueMapper` and `NoMapper` for any other, `SectionMapper` for one written as a section; `PreviousValueTracking`, a cell keeping the value it replaced; `ConfigProcessors` |
 | `resources`              | `@ExtractResources`, files shipped in the JAR extracted to the data folder; `ResourceProcessors` |
 | `event`                  | `@RegisterListeners`, Bukkit listeners registered at start; `EventProcessors` |
 | `util.*`                 | Independent helpers, described below                                      |
@@ -48,6 +48,36 @@ by the kind of helper they are. Package names below are relative to `util`.
 Files are named `<Subject>Extensions.kt` when they hold extension functions and after the type
 when they hold a class. `util` holds helpers on objects a caller holds and pure functions; it never
 imports the root package.
+
+## Internal plumbing (`@VersatiaInternalApi`)
+
+Some declarations are public only because the compile-time step, the generated descriptor and
+VersatiaCore live in other modules than the API. They carry `@VersatiaInternalApi`, a
+`@RequiresOptIn` marker of level `WARNING` in the root package, so a plugin that uses one gets a
+compiler warning saying it is internal plumbing that may change without notice:
+
+| Declaration                                                         | Used by                                   |
+|---------------------------------------------------------------------|-------------------------------------------|
+| `BeanProcessors`, `LifecycleProcessors`, `ConfigProcessors`, `ResourceProcessors`, `EventProcessors` | the annotations declaring the built-in enhancements, the `ksp` module, VersatiaCore |
+| `ValueTypes`                                                        | the `@Value` checks in `ksp` and the value processor |
+| `VersatiaPluginDescriptor`, `DescriptorVersion`                     | the generated descriptor, the descriptor loader |
+| `Instantiator.Direct`/`Reflective`/`WithDefaults`/`ObjectInstance`, `Invoker.Direct`/`Reflective`, `Setter.Direct`/`Reflective` | the generated descriptor; processors call `create`, `invoke` and `set` on the interfaces |
+| `BeanResolver.supply`, `onInstanceCreated`, `instancesOf`           | the `@Value` processor and the bean container |
+| `VersatiaEngine.enhance`, `disable`                                 | `VersatiaPlugin.onEnable` and `onDisable`  |
+| `Phase.appliesTo`                                                   | the runtime's dispatch of elements        |
+
+What a custom `EnhancementProcessor` needs stays unmarked: `EnhancedElement` and its targets,
+`AnnotationOccurrence`, `Parameter`, `TypeReference`, `MemberOwner`, `DefaultArgument`, the
+`Instantiator`, `Invoker` and `Setter` interfaces, `BeanResolver.resolve` and `instanceOf`,
+`StateStore`. Mark a new declaration only when nothing outside the framework has a reason to touch
+it, and never one a custom processor needs: the marker also covers every declaration whose
+signature names a marked type.
+
+The `api` and `ksp` modules, VersatiaCore and module implementations such as
+VersatiaModule-MessagesImpl opt in for the whole module
+(`optIn.add("com.github.marcoral.versatia.VersatiaInternalApi")` in `kotlin.compilerOptions`).
+The generated descriptor opts in for its own file with `@file:OptIn(VersatiaInternalApi::class)`,
+so plugins compile without warnings and without opting in themselves.
 
 ## `VersatiaEngine` shortcuts
 

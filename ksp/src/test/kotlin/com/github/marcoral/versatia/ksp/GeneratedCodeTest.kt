@@ -21,15 +21,28 @@ class GeneratedCodeTest : ProcessorTest() {
                 """
                 package com.example.alpha
 
+                import com.github.marcoral.versatia.VersatiaAttribute
                 import com.github.marcoral.versatia.config.Value
                 import com.github.marcoral.versatia.di.LocalBean
 
+                @Target(AnnotationTarget.CLASS)
+                @Retention(AnnotationRetention.BINARY)
+                @VersatiaAttribute
+                annotation class Limits(val low: kotlin.Double, val floor: kotlin.Long, val tags: kotlin.Array<String>)
+
                 @LocalBean
+                @Limits(kotlin.Double.NaN, kotlin.Long.MIN_VALUE, [])
                 class Map
 
                 class List
 
                 class Int
+
+                class Long
+
+                class Double
+
+                class Any
 
                 annotation class Suppress
 
@@ -59,7 +72,7 @@ class GeneratedCodeTest : ProcessorTest() {
                 """
                 package com.example.alpha.`object`
 
-                import com.github.marcoral.versatia.EventType
+                import com.github.marcoral.versatia.Phase
                 import com.github.marcoral.versatia.config.Value
                 import com.github.marcoral.versatia.di.LocalBean
                 import com.github.marcoral.versatia.di.Qualifier
@@ -72,7 +85,7 @@ class GeneratedCodeTest : ProcessorTest() {
                     @Value("value")
                     var value = 0
 
-                    @AutoInvoke(EventType.PLUGIN_START_ONLY)
+                    @AutoInvoke(Phase.PLUGIN_START_ONLY)
                     fun `in`(config: Config) {}
                 }
                 """,
@@ -135,14 +148,14 @@ class GeneratedCodeTest : ProcessorTest() {
 
     @Test
     fun `splits a large descriptor so that every method stays within the JVM limit`() {
-        val functions = (1..400).joinToString("\n") { "    @AutoInvoke(EventType.PLUGIN_START_ONLY) fun task$it() {}" }
+        val functions = (1..400).joinToString("\n") { "    @AutoInvoke(Phase.PLUGIN_START_ONLY) fun task$it() {}" }
         val result = compile(
             SourceFile.kotlin(
                 "Tasks.kt",
                 """
                 |package com.example.alpha
                 |
-                |import com.github.marcoral.versatia.EventType
+                |import com.github.marcoral.versatia.Phase
                 |import com.github.marcoral.versatia.lifecycle.AutoInvoke
                 |
                 |object Tasks {

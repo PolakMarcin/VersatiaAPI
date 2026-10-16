@@ -14,7 +14,7 @@ import org.bukkit.plugin.java.JavaPlugin
 @ExtractResources
 @RegisterListeners
 abstract class VersatiaPlugin : JavaPlugin() {
-    /** Runs this plugin's reload-phase enhancements, as `/versatia reload <name>` does. */
+    /** Runs this plugin's reload-phase enhancements, and then those of the plugins using its beans, as `/versatia reload <name>` does. */
     fun versatiaReload() = VersatiaEngine.instance.reload(this)
 
     final override fun onEnable() = VersatiaEngine.instance.enhance(this)
