@@ -1,6 +1,6 @@
 rootProject.name = "VersatiaAPI"
 
-include("api", "ksp")
+include("api", "ksp", "catalog")
 
 // Shared by every module; see docs/build.md
 dependencyResolutionManagement {

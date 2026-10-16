@@ -92,7 +92,10 @@ what applies to a whole class). A `PropertyTarget` has the same owner facts for 
 property, its type as a `TypeReference` (qualified name, type arguments, nullability), a
 `Setter` and, for a property declared in a bean's primary constructor, `constructorParameter`, the
 index of that parameter. A `PluginTarget` describes the main class: name, assignable types
-and attributes, nothing to construct. Bean names, `@Primary` and qualifiers are not fields: the DI
+and attributes, nothing to construct. Every target has `className` and `annotations`;
+`FunctionTarget` and `PropertyTarget` share `MemberTarget` (`binaryClassName`, `owner`,
+`classAnnotations` and `description`, the `Shop.open()` or `Shop.tax` form messages use), so a
+processor can treat members alike. Bean names, `@Primary` and qualifiers are not fields: the DI
 processor derives them from the recorded attributes.
 
 An `AnnotationOccurrence` is the annotation's class name and its arguments, defaults included.
@@ -198,6 +201,32 @@ their store is dropped. These stores are the only way processors share anything:
 publish the plugin's beans in `state` under `BeanResolver.KEY` and keep the registry of exposed
 beans in `runtimeState`; the auto-invoke processor, or any processor of any plugin, injects by
 reading `context.state[BeanResolver.KEY]`.
+
+### Helpers for processors
+
+Core's processors are written with the same helpers a custom processor uses
+(`EnhancementProcessorExtensions.kt`, root package), so the rules and the messages are the same
+everywhere:
+
+| Helper | What it does |
+|---|---|
+| `element.targetAs<FunctionTarget>(this)` | the target as the expected kind; otherwise `P can only enhance functions, got the property Shop.tax` |
+| `context.receiverOf(target)` | for a `MemberTarget`, the plugin, the `object` instance or the plugin's bean of the declaring class; `Plugin X: no bean Shop exists to call Shop.open() on` when there is none |
+| `context.inject(requester, parameters)` | the arguments, resolved through the plugin's `BeanResolver`; empty for no parameters, `Plugin X: Shop.open() needs injected parameters, but the plugin has no beans` when there are some and no beans |
+| `context.failure(message, cause)` | an `EnhancementException` reading `Plugin X: message` |
+
+```kotlin
+class TimedEnhancementProcessor : EnhancementProcessor {
+    override fun process(elements: List<EnhancedElement>, context: EnhancementContext) = context.onPluginEnhanced {
+        for (element in elements) {
+            val target = element.targetAs<FunctionTarget>(this)
+            val instance = context.receiverOf(target)
+            val arguments = context.inject(target.description, target.parameters)
+            target.invoker.invoke(context.classLoader, instance, arguments)
+        }
+    }
+}
+```
 
 ## Dependency injection
 

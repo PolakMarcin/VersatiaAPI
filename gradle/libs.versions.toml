@@ -1,0 +1,25 @@
+# Third-party versions shared by every Versatia repository; published as VersatiaCatalog (see docs/build.md)
+[versions]
+kotlin = "2.4.20"
+ksp = "2.3.12"
+kotlinpoet = "2.4.0"
+kctfork = "0.14.0"
+paper = "1.21.4-R0.1-SNAPSHOT"
+commandapi = "12.1.0"
+snakeyaml = "2.4"
+
+[libraries]
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
+kotlinpoet-core = { module = "com.squareup:kotlinpoet", version.ref = "kotlinpoet" }
+kotlinpoet-ksp = { module = "com.squareup:kotlinpoet-ksp", version.ref = "kotlinpoet" }
+kctfork-ksp = { module = "dev.zacsweers.kctfork:ksp", version.ref = "kctfork" }
+commandapi-paper-core = { module = "dev.jorel:commandapi-paper-core", version.ref = "commandapi" }
+commandapi-kotlin-paper = { module = "dev.jorel:commandapi-kotlin-paper", version.ref = "commandapi" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+# Version aligned by the JUnit BOM that kotlin("test") brings
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

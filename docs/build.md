@@ -9,11 +9,35 @@ build scripts and what each module exports to projects that depend on it.
 |--------|------------------------------------------------------|------------------------------------------------------|
 | `api`  | `com.github.marcoral.versatia:VersatiaAPI`       | public API, helpers, annotations; on the server      |
 | `ksp`  | `com.github.marcoral.versatia:VersatiaAPI-ksp`   | KSP processor generating descriptors; compile time   |
+| `catalog` | `com.github.marcoral.versatia:VersatiaCatalog` | Gradle version catalog shared by every Versatia build |
 
-The root project only declares the Kotlin plugin version (`apply false`) and the shared
-repositories (`dependencyResolutionManagement` in `settings.gradle.kts`). Versions shared by the
-modules live in `gradle.properties` (`versatiaVersion`, `kspVersion`, `kotlinPoetVersion`,
-`kctforkVersion`).
+The root project only declares the Kotlin plugin (`apply false`) and the shared repositories
+(`dependencyResolutionManagement` in `settings.gradle.kts`). The framework version is
+`versatiaVersion` in `gradle.properties`; every third-party version (Kotlin, KSP, KotlinPoet,
+kctfork, Paper API, CommandAPI, SnakeYAML) lives in `gradle/libs.versions.toml`, which this build
+uses as its own `libs` catalog.
+
+## `catalog`: the shared version catalog
+
+The `catalog` module applies `version-catalog` and publishes `gradle/libs.versions.toml` as
+`VersatiaCatalog`, adding the version `versatia` (= `versatiaVersion`) and the libraries
+`versatia-api`, `versatia-ksp`, `versatia-starter` and `versatia-messages`. The other repositories
+import it in `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            from("com.github.marcoral.versatia:VersatiaCatalog:${providers.gradleProperty("versatiaVersion").get()}")
+        }
+    }
+}
+```
+
+and write `alias(libs.plugins.kotlin.jvm)`, `alias(libs.plugins.ksp)`, `libs.paper.api`,
+`libs.versatia.starter` and so on. A version bump is one edit in `libs.versions.toml` plus
+`./gradlew publishToMavenLocal` here. VersatiaModule-Messages is the exception: it builds without
+any Versatia artifact, so it keeps literal versions equal to the catalog's.
 
 `archivesName` and the publication `artifactId` are set explicitly, so the artifacts keep their
 names even though the Gradle project names are `api` and `ksp`. Gradle derives the coordinates of
@@ -88,8 +112,8 @@ Run them with `./gradlew test`; `./gradlew build` runs them as well.
 
 ## Publishing
 
-Each module has a single `maven` publication from its `java` component: POM, Gradle Module
-Metadata (`.module`), binary JAR and sources JAR.
+`api` and `ksp` each have a single `maven` publication from their `java` component: POM, Gradle
+Module Metadata (`.module`), binary JAR and sources JAR; `catalog` publishes the TOML file.
 
 Gradle consumers read the `.module` file, which keeps the `compileOnlyApi` / `api` distinction
 exactly. Maven consumers read the POM, where both appear with `compile` scope.

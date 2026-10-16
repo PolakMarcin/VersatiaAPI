@@ -36,8 +36,14 @@ fun VersatiaEngine.Companion.worldOrNull(name: String) = Bukkit.getWorld(name)
 /** Sends [message] to everyone holding [permission], by default every player and the console; returns the number of recipients. */
 fun VersatiaEngine.Companion.broadcast(message: Component, permission: String = Server.BROADCAST_CHANNEL_USERS) = Bukkit.broadcast(message, permission)
 
-/** Runs [commandLine], without the slash, as the console; false when no command handles it. Primary thread only. A player runs one with `player.performCommand`. */
-fun VersatiaEngine.Companion.dispatchConsoleCommand(commandLine: String) = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandLine)
+/**
+ * Runs [commandLine], without the slash, as the console; false when no command handles it. Off the primary thread it throws
+ * an `IllegalStateException` instead of running anything. A player runs one with `player.performCommand`.
+ */
+fun VersatiaEngine.Companion.dispatchConsoleCommand(commandLine: String): Boolean {
+    checkPrimaryThread("dispatchConsoleCommand(\"$commandLine\")")
+    return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandLine)
+}
 
 /* SERVICES */
 
@@ -51,6 +57,10 @@ inline fun <reified T : Any> VersatiaEngine.Companion.loadService() = loadServic
 
 fun VersatiaEngine.Companion.isPrimaryThread() = Bukkit.isPrimaryThread()
 
-fun VersatiaEngine.Companion.checkPrimaryThread() = check(isPrimaryThread()) { "This code must run on the primary thread" }
+/** Throws an `IllegalStateException` naming [action] and how to move it when called off the server's main thread. */
+fun VersatiaEngine.Companion.checkPrimaryThread(action: String = "This code") =
+    check(isPrimaryThread()) { "$action must run on the server's main thread; schedule it with plugin.runTask { ... }" }
 
-fun VersatiaEngine.Companion.checkNotPrimaryThread() = check(!isPrimaryThread()) { "This code must not run on the primary thread" }
+/** Throws an `IllegalStateException` naming [action] and how to move it when called on the server's main thread. */
+fun VersatiaEngine.Companion.checkNotPrimaryThread(action: String = "This code") =
+    check(!isPrimaryThread()) { "$action must not run on the server's main thread; schedule it with plugin.runTaskAsynchronously { ... }" }

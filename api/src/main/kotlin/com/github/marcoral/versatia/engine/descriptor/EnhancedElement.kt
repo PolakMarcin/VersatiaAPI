@@ -35,6 +35,22 @@ inline fun <reified A : Annotation> List<AnnotationOccurrence>.occurrenceOf() = 
 
 sealed interface ElementTarget {
     val className: String
+
+    /** The recorded annotations written on the element itself. */
+    val annotations: List<AnnotationOccurrence>
+}
+
+/** A function or property of a class: what a processor needs to find the instance it belongs to. */
+sealed interface MemberTarget : ElementTarget {
+    /** The JVM name of the declaring class. */
+    val binaryClassName: String
+    val owner: MemberOwner
+
+    /** The attributes written on the declaring class; what applies to a whole class is read from here. */
+    val classAnnotations: List<AnnotationOccurrence>
+
+    /** How messages name the member: `com.example.Shop.open()` or `com.example.Shop.tax`. */
+    val description: String
 }
 
 /**
@@ -67,7 +83,7 @@ data class ClassTarget(
     override val className: String,
     /** The class itself and every supertype except `Any`. */
     val assignableTypes: List<String>,
-    val annotations: List<AnnotationOccurrence>,
+    override val annotations: List<AnnotationOccurrence>,
     val constructorParameters: List<Parameter>,
     val instantiator: Instantiator,
 ) : ElementTarget
@@ -77,7 +93,7 @@ data class PluginTarget(
     override val className: String,
     /** The class itself and every supertype except `Any`. */
     val assignableTypes: List<String>,
-    val annotations: List<AnnotationOccurrence>,
+    override val annotations: List<AnnotationOccurrence>,
 ) : ElementTarget
 
 /** Who holds the instance a [FunctionTarget] is called on or a [PropertyTarget] is set on. */
@@ -90,33 +106,35 @@ enum class MemberOwner {
     INSTANCE,
 }
 
-/** A function the runtime may call. [binaryClassName] is the JVM name of the declaring class. */
+/** A function the runtime may call. */
 data class FunctionTarget(
     override val className: String,
-    val binaryClassName: String,
+    override val binaryClassName: String,
     val functionName: String,
-    val owner: MemberOwner,
-    val annotations: List<AnnotationOccurrence>,
+    override val owner: MemberOwner,
+    override val annotations: List<AnnotationOccurrence>,
     val parameters: List<Parameter>,
     val invoker: Invoker,
-    /** The attributes written on the declaring class; what applies to a whole class is read from here. */
-    val classAnnotations: List<AnnotationOccurrence> = emptyList(),
-) : ElementTarget
+    override val classAnnotations: List<AnnotationOccurrence> = emptyList(),
+) : MemberTarget {
+    override val description get() = "$className.$functionName()"
+}
 
-/** A mutable property the runtime may set. [binaryClassName] is the JVM name of the declaring class. */
+/** A mutable property the runtime may set. */
 data class PropertyTarget(
     override val className: String,
-    val binaryClassName: String,
+    override val binaryClassName: String,
     val propertyName: String,
-    val owner: MemberOwner,
+    override val owner: MemberOwner,
     val type: TypeReference,
-    val annotations: List<AnnotationOccurrence>,
+    override val annotations: List<AnnotationOccurrence>,
     val setter: Setter,
-    /** The attributes written on the declaring class; what applies to a whole class is read from here. */
-    val classAnnotations: List<AnnotationOccurrence> = emptyList(),
+    override val classAnnotations: List<AnnotationOccurrence> = emptyList(),
     /**
      * For a property declared in the primary constructor of a bean, the index of that constructor
      * parameter: its value is passed to the constructor when the bean is created.
      */
     val constructorParameter: Int? = null,
-) : ElementTarget
+) : MemberTarget {
+    override val description get() = "$className.$propertyName"
+}

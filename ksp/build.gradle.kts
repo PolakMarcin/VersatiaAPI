@@ -13,22 +13,18 @@ base {
     archivesName = "VersatiaAPI-ksp"
 }
 
-val kspVersion = providers.gradleProperty("kspVersion").get()
-val kotlinPoetVersion = providers.gradleProperty("kotlinPoetVersion").get()
-val kctforkVersion = providers.gradleProperty("kctforkVersion").get()
-
 // Runs inside the plugin author's compiler, never on the server; see docs/build.md
 dependencies {
     implementation(project(":api"))
-    implementation("com.google.devtools.ksp:symbol-processing-api:$kspVersion")
-    implementation("com.squareup:kotlinpoet:$kotlinPoetVersion")
-    implementation("com.squareup:kotlinpoet-ksp:$kotlinPoetVersion")
+    implementation(libs.ksp.api)
+    implementation(libs.kotlinpoet.core)
+    implementation(libs.kotlinpoet.ksp)
 
     testImplementation(kotlin("test"))
-    testImplementation("dev.zacsweers.kctfork:ksp:$kctforkVersion")
+    testImplementation(libs.kctfork.ksp)
     // Sample plugin sources compiled in tests extend JavaPlugin
-    testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.paper.api)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 java {

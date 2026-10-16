@@ -18,7 +18,7 @@ that deliver no feature of their own but are needed for the framework to work.
 
 | Package                  | Contents                                                                  |
 |--------------------------|---------------------------------------------------------------------------|
-| `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `@VersatiaSubclassEnhancement`, `EnhancementProcessor`, `EnhancementContext` with its `classLoader` extension, `StateStore`, `StateKey`, `Phase`, `LifecycleEvent`, `EnhancementException`, `@VersatiaDisabler`, `@VersatiaInternalApi`), the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`, `@DisableVersatiaFeatures`) and the attributes the runtime reads itself (`@ConditionalOnPlugin`, `@FriendlyName`, with `PluginRegistry` reading friendly names back); the static shortcuts on `VersatiaEngine` (`VersatiaEngineExtensions.kt`) and `ServiceNotRegisteredException` |
+| `com.github.marcoral.versatia` | the enhancement mechanism (`@VersatiaEnhancement`, `@VersatiaAttribute`, `@VersatiaSubclassEnhancement`, `EnhancementProcessor`, `EnhancementContext` with its `classLoader` extension and the processor helpers `targetAs`, `receiverOf`, `inject`, `failure`, `StateStore`, `StateKey`, `Phase`, `LifecycleEvent`, `EnhancementException`, `@VersatiaDisabler`, `@VersatiaInternalApi`), the plugin bootstrap (`VersatiaPlugin`, `VersatiaEngine`, `@DisableVersatiaFeatures`) and the attributes the runtime reads itself (`@ConditionalOnPlugin`, `@FriendlyName`, with `PluginRegistry` reading friendly names back); the static shortcuts on `VersatiaEngine` (`VersatiaEngineExtensions.kt`) and `ServiceNotRegisteredException` |
 | `engine.descriptor`      | Model of the generated descriptor: `VersatiaPluginDescriptor`, `EnhancedElement`, `AnnotationOccurrence`, `ClassTarget`, `FunctionTarget`, `PropertyTarget`, `PluginTarget`, `MemberOwner`, `Parameter`, `TypeReference`, `Instantiator` with `DefaultArgument`, `Invoker`, `Setter`, `DescriptorVersion` |
 | `di`                     | Bean scopes: `@Bean`, `@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@PluginBean`; `@Qualifier`, `@Primary`; `Reloadable`, beans reloaded with their plugin; `BeanResolver`, the injection contract for processors; `BeanProcessors`, `BeanNames` |
 | `lifecycle`              | `@AutoInvoke`, functions called at a lifecycle phase; `LifecycleProcessors` |
@@ -41,7 +41,7 @@ by the kind of helper they are. Package names below are relative to `util`.
 | `reflect`      | Access to private members through `kotlin-reflect`                                        |
 | `scheduler`    | `Plugin.runTask*` wrappers over `BukkitScheduler`                                         |
 | `text`         | Subscript/superscript digits                                                             |
-| `type`         | Small value types: `Percent`, `LevelWithExp`                                              |
+| `type`         | Small value type `Percent`                                                                |
 | `validation`   | `validateAtLeast`-style guards that return the receiver                                   |
 | `world`        | `Location` helpers                                                                        |
 
@@ -69,7 +69,8 @@ compiler warning saying it is internal plumbing that may change without notice:
 What a custom `EnhancementProcessor` needs stays unmarked: `EnhancedElement` and its targets,
 `AnnotationOccurrence`, `Parameter`, `TypeReference`, `MemberOwner`, `DefaultArgument`, the
 `Instantiator`, `Invoker` and `Setter` interfaces, `BeanResolver.resolve` and `instanceOf`,
-`StateStore`. Mark a new declaration only when nothing outside the framework has a reason to touch
+`StateStore`, and the helpers `targetAs`, `receiverOf`, `inject` and `failure` (see
+[enhancements.md](enhancements.md#helpers-for-processors)). Mark a new declaration only when nothing outside the framework has a reason to touch
 it, and never one a custom processor needs: the marker also covers every declaration whose
 signature names a marked type.
 

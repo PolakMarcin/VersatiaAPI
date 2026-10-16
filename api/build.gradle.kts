@@ -15,13 +15,13 @@ base {
 
 // Exported to consumers' compile classpath; see docs/build.md
 dependencies {
-    compileOnlyApi("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    compileOnlyApi(libs.paper.api)
     api(kotlin("stdlib"))
     api(kotlin("reflect"))
 
     testImplementation(kotlin("test"))
-    testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.paper.api)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // Paper 1.21.4 requires Java 21
