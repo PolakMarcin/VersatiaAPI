@@ -18,4 +18,7 @@ interface PluginRegistry {
     fun friendlyNameOf(plugin: Plugin): String? = plugins.entries.firstOrNull { it.value === plugin }?.key
 
     operator fun get(friendlyName: String): Plugin? = plugins[friendlyName]
+
+    /** The plugin registered as [friendlyName]; the exception lists the running names when there is none. */
+    fun getOrThrow(friendlyName: String) = this[friendlyName] ?: throw NoSuchElementException("No Versatia plugin is called \"$friendlyName\". Running: ${friendlyNames.joinToString().ifEmpty { "none" }}.")
 }

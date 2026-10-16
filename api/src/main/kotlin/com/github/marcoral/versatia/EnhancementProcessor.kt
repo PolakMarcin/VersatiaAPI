@@ -31,6 +31,6 @@ interface EnhancementContext {
 }
 
 /** The loader that defines the plugin's classes, including its generated descriptor. */
-val EnhancementContext.classLoader get() = plugin.javaClass.classLoader
+val EnhancementContext.classLoader: ClassLoader get() = plugin.javaClass.classLoader
 
 class EnhancementException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

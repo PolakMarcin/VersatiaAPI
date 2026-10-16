@@ -19,5 +19,8 @@ class ScriptDigitsTest {
         assertFailsWith<IllegalArgumentException> { "1.5".toSubscript() }
         assertFailsWith<IllegalArgumentException> { "1-2".toSuperscript() }
         assertFailsWith<IllegalArgumentException> { "x".toSubscript() }
+        assertFailsWith<IllegalArgumentException> { "-".toSubscript() }
+        assertFailsWith<IllegalArgumentException> { "٣".toSubscript() }
+        assertFailsWith<IllegalArgumentException> { "３".toSuperscript() }
     }
 }

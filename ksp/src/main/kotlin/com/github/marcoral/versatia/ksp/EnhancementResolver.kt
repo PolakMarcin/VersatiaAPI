@@ -6,7 +6,7 @@ import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 import com.github.marcoral.versatia.ksp.model.Enhancement
 import com.github.marcoral.versatia.ksp.model.SubclassEnhancement
 import com.google.devtools.ksp.getDeclaredProperties
-import com.google.devtools.ksp.processing.KSPLogger
+import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSNode
@@ -16,13 +16,10 @@ import com.squareup.kotlinpoet.ksp.toClassName
 
 /**
  * Walks the annotations an annotation *inherits* (its meta-annotations, transitively) and resolves
- * every `@VersatiaEnhancement` found on the way, including the phase it runs at.
- * See docs/enhancements.md.
+ * every `@VersatiaEnhancement` and `@VersatiaSubclassEnhancement` found on the way, including the
+ * phase it runs at. See docs/enhancements.md.
  */
-internal class EnhancementResolver(private val logger: KSPLogger) {
-    var hadErrors = false
-        private set
-
+internal class EnhancementResolver(private val reporter: Reporter) {
     private val enhancementName = VersatiaEnhancement::class.qualifiedName!!
     private val containerName = "$enhancementName.Container"
     private val subclassName = VersatiaSubclassEnhancement::class.qualifiedName!!
@@ -31,6 +28,9 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
 
     /** A visited annotation class together with the occurrence through which it was reached. */
     class Link(val declaration: KSClassDeclaration, val occurrence: KSAnnotation)
+
+    /** An enhancement annotation written on a function or property, with what it resolves to. */
+    class MemberEnhancement(val annotation: KSAnnotation, val chain: List<Link>, val enhancements: List<Enhancement>)
 
     /** [annotation] itself first, then everything it inherits, breadth first. */
     fun chainOf(annotation: KSAnnotation): List<Link> {
@@ -50,53 +50,79 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
 
     fun inherits(chain: List<Link>, annotationName: String) = chain.drop(1).any { it.declaration.qualifiedName?.asString() == annotationName }
 
+    /** Whether the annotation of [chain] is an enhancement: it inherits `@VersatiaEnhancement`. */
+    fun isEnhancement(chain: List<Link>) = inherits(chain, enhancementName)
+
+    /** Whether any annotation on [annotated] is an enhancement. */
+    fun isEnhanced(annotated: KSAnnotated) = annotated.annotations.any { isEnhancement(chainOf(it)) }
+
+    /** The enhancement annotations on a function or property, each resolved; errors point at [member]. */
+    fun memberEnhancementsOf(member: KSAnnotated) = member.annotations.mapNotNull { annotation ->
+        val chain = chainOf(annotation)
+        if (isEnhancement(chain)) MemberEnhancement(annotation, chain, enhancementsOf(chain, member)) else null
+    }.toList()
+
+    /** Whether some annotation along [chain] carries a `@VersatiaEnhancement`, resolvable or not. */
+    fun declaresEnhancement(chain: List<Link>) = chain.any { link -> declarationsOn(link, enhancementName, containerName).isNotEmpty() }
+
+    /** The processor classes named along [chain], read without validation or reports. */
+    fun processorNamesOf(chain: List<Link>) =
+        chain.flatMap { link -> declarationsOn(link, enhancementName, containerName).mapNotNull { it.argument("processorClass") as? String } }
+
     /**
      * Enhancements declared along [chain]. [usage] is where errors are reported when the carrier
      * annotation comes from the classpath and has no source location of its own.
      */
-    fun enhancementsOf(chain: List<Link>, usage: KSNode) = chain.flatMap { link ->
-        link.declaration.annotations
-            .flatMap { unwrapRepeatable(it, containerName) }
-            .filter { it.declaration()?.qualifiedName?.asString() == enhancementName }
-            .mapNotNull { resolve(it, link, usage) }
-    }
+    fun enhancementsOf(chain: List<Link>, usage: KSNode) =
+        chain.flatMap { link -> declarationsOn(link, enhancementName, containerName).mapNotNull { resolve(it, link, usage) } }
 
     /** Subclass enhancements declared along [chain]; errors are reported like in [enhancementsOf]. */
-    fun subclassEnhancementsOf(chain: List<Link>, usage: KSNode) = chain.flatMap { link ->
-        link.declaration.annotations
-            .flatMap { unwrapRepeatable(it, subclassContainerName) }
-            .filter { it.declaration()?.qualifiedName?.asString() == subclassName }
-            .mapNotNull { resolveSubclass(it, link, usage) }
-    }
+    fun subclassEnhancementsOf(chain: List<Link>, usage: KSNode) =
+        chain.flatMap { link -> declarationsOn(link, subclassName, subclassContainerName).mapNotNull { resolveSubclass(it, link, usage) } }
+
+    private fun declarationsOn(link: Link, annotationName: String, container: String) = link.declaration.annotations
+        .flatMap { unwrapRepeatable(it, container) }
+        .filter { it.declaration()?.qualifiedName?.asString() == annotationName }
+        .toList()
+
+    /** What both declaration kinds share: the carrier's name, where to report and the processor class. */
+    private class Declaration(val carrierName: String, val reportAt: KSNode, val processorClass: String?)
+
+    private fun declaration(enhancement: KSAnnotation, carrier: Link, usage: KSNode) = Declaration(
+        carrierName = carrier.declaration.simpleName.asString(),
+        reportAt = if (carrier.declaration.origin == Origin.KOTLIN) carrier.declaration else usage,
+        processorClass = (enhancement.argument("processorClass") as? String)?.takeIf { it.isNotBlank() },
+    )
 
     private fun resolveSubclass(enhancement: KSAnnotation, carrier: Link, usage: KSNode): SubclassEnhancement? {
-        val carrierName = carrier.declaration.simpleName.asString()
-        val reportAt = if (carrier.declaration.origin == Origin.KOTLIN) carrier.declaration else usage
-        val processorClass = (enhancement.argument("processorClass") as? String)?.takeIf { it.isNotBlank() }
-            ?: return fail(reportAt, "@VersatiaSubclassEnhancement on $carrierName has no processorClass")
-        val subclassOf = (enhancement.argument("subclassOf") as? KSType)?.declaration as? KSClassDeclaration
-            ?: return fail(reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName names no class in subclassOf")
+        val declaration = declaration(enhancement, carrier, usage)
+        val carrierName = declaration.carrierName
+        val processorClass = declaration.processorClass
+            ?: return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement on $carrierName has no processorClass")
+        val subclassOf = ((enhancement.argument("subclassOf") as? KSType)?.expanded()?.declaration as? KSClassDeclaration)
+            ?: return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName names no class in subclassOf")
         val phase = enhancement.argument("enhancementPhase").asEventType()
-        if (phase == EventType._NULL) return fail(reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName must set enhancementPhase to a phase other than _NULL")
+        if (phase == EventType._NULL)
+            return reporter.fail(declaration.reportAt, "@VersatiaSubclassEnhancement(\"$processorClass\") on $carrierName must set enhancementPhase to a phase other than _NULL")
         return SubclassEnhancement(processorClass, phase, subclassOf.toClassName())
     }
 
     private fun resolve(enhancement: KSAnnotation, carrier: Link, usage: KSNode): Enhancement? {
-        val carrierName = carrier.declaration.simpleName.asString()
-        val reportAt = if (carrier.declaration.origin == Origin.KOTLIN) carrier.declaration else usage
-        val processorClass = (enhancement.argument("processorClass") as? String)?.takeIf { it.isNotBlank() }
-            ?: return fail(reportAt, "@VersatiaEnhancement on $carrierName has no processorClass")
+        val declaration = declaration(enhancement, carrier, usage)
+        val carrierName = declaration.carrierName
+        val reportAt = declaration.reportAt
+        val processorClass = declaration.processorClass ?: return reporter.fail(reportAt, "@VersatiaEnhancement on $carrierName has no processorClass")
         val fixedPhase = enhancement.argument("enhancementPhase").asEventType()
         val paramRef = enhancement.argument("enhancementPhaseParamRefName") as? String ?: ""
 
         val phase = when {
-            fixedPhase != EventType._NULL && paramRef.isNotEmpty() -> return fail(
+            fixedPhase != EventType._NULL && paramRef.isNotEmpty() -> return reporter.fail(
                 reportAt,
                 "@VersatiaEnhancement(\"$processorClass\") on $carrierName sets both enhancementPhase and " +
                     "enhancementPhaseParamRefName; exactly one of them is required",
             )
             fixedPhase != EventType._NULL -> fixedPhase
-            paramRef.isEmpty() -> return fail(
+            paramRef.isEmpty() -> return reporter.fail(
                 reportAt,
                 "@VersatiaEnhancement(\"$processorClass\") on $carrierName declares no phase; set enhancementPhase " +
                     "or enhancementPhaseParamRefName",
@@ -109,15 +135,15 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
     private fun phaseFromProperty(carrier: Link, paramRef: String, processorClass: String, reportAt: KSNode): EventType? {
         val carrierName = carrier.declaration.simpleName.asString()
         val property = carrier.declaration.getDeclaredProperties().firstOrNull { it.simpleName.asString() == paramRef }
-            ?: return fail(
+            ?: return reporter.fail(
                 reportAt,
                 "@VersatiaEnhancement(\"$processorClass\") on $carrierName refers to property \"$paramRef\", " +
                     "which $carrierName does not declare",
             )
-        if (property.type.resolve().declaration.qualifiedName?.asString() != eventTypeName)
-            return fail(reportAt, "Property \"$paramRef\" of $carrierName must be of type EventType to hold the phase")
+        if (property.type.resolve().expanded().declaration.qualifiedName?.asString() != eventTypeName)
+            return reporter.fail(reportAt, "Property \"$paramRef\" of $carrierName must be of type EventType to hold the phase")
         val phase = carrier.occurrence.argument(paramRef).asEventType()
-        if (phase == EventType._NULL) return fail(
+        if (phase == EventType._NULL) return reporter.fail(
             carrier.occurrence,
             "@$carrierName must set $paramRef to a phase other than _NULL; it decides when the enhancement runs",
         )
@@ -129,22 +155,11 @@ internal class EnhancementResolver(private val logger: KSPLogger) {
         if (annotation.declaration()?.qualifiedName?.asString() != container) listOf(annotation)
         else (annotation.argument("value") as? List<*>).orEmpty().filterIsInstance<KSAnnotation>()
 
-    private fun Any?.asEventType() = when (this) {
-        is KSClassDeclaration -> simpleName.asString()
-        is KSType -> declaration.simpleName.asString()
-        is Enum<*> -> name
-        else -> null
-    }.let { entryName -> EventType.entries.firstOrNull { it.name == entryName } } ?: EventType._NULL
-
-    private fun fail(node: KSNode, message: String): Nothing? {
-        hadErrors = true
-        logger.error(message, node)
-        return null
-    }
+    private fun Any?.asEventType() = enumEntryName(this).let { entryName -> EventType.entries.firstOrNull { it.name == entryName } } ?: EventType._NULL
 }
 
 /** The value written for [name], or its default. */
 internal fun KSAnnotation.argument(name: String) = arguments.firstOrNull { it.name?.asString() == name }?.value
     ?: defaultArguments.firstOrNull { it.name?.asString() == name }?.value
 
-internal fun KSAnnotation.declaration() = annotationType.resolve().declaration as? KSClassDeclaration
+internal fun KSAnnotation.declaration() = annotationType.resolve().takeUnless { it.isError }?.expanded()?.declaration as? KSClassDeclaration

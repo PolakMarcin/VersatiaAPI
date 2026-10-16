@@ -25,18 +25,21 @@ class DeepMergeMap<K> private constructor(
     val conflictStrategy: MergeConflictStrategy,
 ) : MutableMap<K, Any?> by backing {
 
+    /** Starts with a deep copy of [initial], as if it had been merged into an empty map. */
     constructor(
         initial: Map<out K, Any?> = emptyMap(),
         conflictStrategy: MergeConflictStrategy = MergeConflictStrategy.OVERRIDE,
-    ) : this(LinkedHashMap(initial), conflictStrategy)
+    ) : this(LinkedHashMap(), conflictStrategy) {
+        for ((key, value) in initial) backing[key] = deepCopy(value)
+    }
 
     /** Merges [other] into this map. [other] and its nested values are never mutated. */
     fun merge(other: Map<out K, Any?>) = mergeInto(backing, other, emptyList())
 
     operator fun plusAssign(other: Map<out K, Any?>) = merge(other)
 
-    /** Returns a new map holding the result of merging [other] into a copy of this map. */
-    fun mergedWith(other: Map<out K, Any?>) = DeepMergeMap(LinkedHashMap(backing), conflictStrategy).apply { merge(other) }
+    /** Returns a new map holding the result of merging [other] into a deep copy of this map. */
+    fun mergedWith(other: Map<out K, Any?>) = DeepMergeMap(this, conflictStrategy).apply { merge(other) }
 
     override fun equals(other: Any?) = backing == other
     override fun hashCode() = backing.hashCode()
@@ -48,7 +51,7 @@ class DeepMergeMap<K> private constructor(
             destination[key] = when {
                 !destination.containsKey(key) -> deepCopy(newValue)
                 existing is Map<*, *> && newValue is Map<*, *> -> mergeNested(existing, newValue, path + key)
-                existing is Collection<*> && newValue is Collection<*> -> existing + newValue
+                existing is Collection<*> && newValue is Collection<*> -> existing.toList() + newValue.map(::deepCopy)
                 else -> resolveConflict(existing, newValue, path + key)
             }
         }
@@ -62,9 +65,9 @@ class DeepMergeMap<K> private constructor(
         MergeConflictStrategy.OVERRIDE -> deepCopy(newValue)
         MergeConflictStrategy.KEEP_EXISTING -> existing
         MergeConflictStrategy.COMBINE_INTO_LIST -> when {
-            existing is Collection<*> -> existing + newValue
-            newValue is Collection<*> -> listOf(existing) + newValue
-            else -> listOf(existing, newValue)
+            existing is Collection<*> -> existing.toList() + deepCopy(newValue)
+            newValue is Collection<*> -> listOf(existing) + newValue.map(::deepCopy)
+            else -> listOf(existing, deepCopy(newValue))
         }
         MergeConflictStrategy.THROW -> throw IllegalStateException(
             "Conflicting values at \"${path.joinToString(".")}\": existing \"$existing\", new \"$newValue\"",

@@ -32,6 +32,18 @@ class PercentTest {
     }
 
     @Test
+    fun `edge cases normalise negative zero, tolerate rounding and reject NaN`() {
+        assertEquals(Percent.ZERO, Percent.of(0, -5))
+        assertEquals(Percent.ZERO, Percent.parse("-0%"))
+        assertEquals("0.0%", Percent.of(-0.0).toString())
+        assertEquals(Percent.FULL, Percent.of(0.1 + 0.2, 0.3))
+        assertEquals(
+            "Share of NaN in 1 is not a number",
+            assertFailsWith<IllegalArgumentException> { Percent.ofCoerced(Double.NaN, 1) }.message,
+        )
+    }
+
+    @Test
     fun `parse accepts percent strings only`() {
         assertEquals(12.5, Percent.parse("12.5%").value)
         assertEquals(7.0, Percent.parse(" 7 % ").value)

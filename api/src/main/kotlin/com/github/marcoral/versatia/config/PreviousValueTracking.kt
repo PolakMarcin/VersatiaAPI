@@ -6,7 +6,10 @@ package com.github.marcoral.versatia.config
  * [value] at start and at every reload; the property itself stays a `val`. [previous] is the
  * value the last assignment replaced and [changed] says whether it differs. The first assignment
  * counts as a change, so a `PLUGIN_RELOAD_OR_START` function that checks `changed` acts at start
- * and at the reloads that matter. See docs/enhancements.md.
+ * and at the reloads that matter. Values are compared with `equals`: scalars, enums, lists, sets,
+ * maps and data classes compare by content, but a `ConfigurationSection` or a mapper result of a
+ * class without `equals` is a new object at every reload and always counts as changed, so map
+ * such values to a data class. See docs/enhancements.md.
  */
 class PreviousValueTracking<T> {
     private var assignments = 0
@@ -24,8 +27,7 @@ class PreviousValueTracking<T> {
         }
 
     /** The value [value] replaced, or null when nothing has been replaced yet; see [hasPrevious]. */
-    val previous: T?
-        get() = if (hasPrevious) before else null
+    val previous get() = if (hasPrevious) before else null
 
     /** Whether [value] replaced an earlier one; false until the second assignment. */
     val hasPrevious get() = assignments >= 2

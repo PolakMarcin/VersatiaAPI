@@ -15,8 +15,17 @@ lives in VersatiaCore and is documented there (`docs/runtime.md`).
   or in any plugin that the enhanced plugin depends on.
 - **Attribute**: an annotation marked `@VersatiaAttribute` (root package). Wherever it appears on
   an enhanced class, its constructor parameters, an enhanced function or its parameters, or an
-  enhanced property, the descriptor records it together with its arguments, so processors can read it. `@Qualifier` and
-  `@Primary` are attributes.
+  enhanced property, the descriptor records it together with its arguments, so processors can read it. `@Qualifier`,
+  `@Primary`, `@FriendlyName` and `@ConditionalOnPlugin` are attributes. An annotation class
+  inheriting an attribute counts as that attribute, at any depth: after `@Qualifier("fast")
+  annotation class Fast`, `@Fast` on a bean or an injected parameter is `@Qualifier("fast")`, and
+  after `@Primary annotation class Preferred`, `@Preferred` marks a primary bean. `Attributes`
+  records the inherited occurrences next to the custom annotation, so the processor's own checks
+  and the runtime read them as if written on the element; their arguments are checked on the
+  annotation class. An attribute reaching an element more than once, directly and through a custom
+  annotation or through two of them, is an error (`X has @Qualifier more than once: written
+  directly and inherited from @Fast; keep one`), unless it is `@Repeatable`, as
+  `@ConditionalOnPlugin` is: its occurrences add up.
 - **Annotation inheritance**: an annotation class annotated with another annotation *inherits* it.
   The relation is transitive. When `@ExposePrototype` is annotated with `@Bean`, every class marked
   `@ExposePrototype` counts as marked `@Bean`. Plugin authors can define their own scopes this way:
@@ -50,9 +59,10 @@ annotation class LocalBean
 
 - `processorClass` is the fully qualified name of the processor. A name, not a class: the plugin
   compiles against VersatiaAPI only, and the processor is in VersatiaCore or in another plugin.
-  VersatiaAPI keeps the names of the built-in processors in `BeanProcessors` (`di`) and
-  `LifecycleProcessors` (`lifecycle`). A mistyped name is found when the plugin enables, not at
-  compile time.
+  VersatiaAPI keeps the names of the built-in processors in `BeanProcessors` (`di`),
+  `LifecycleProcessors` (`lifecycle`), `ConfigProcessors` (`config`), `ResourceProcessors`
+  (`resources`) and `EventProcessors` (`event`). A mistyped name is found when the plugin enables,
+  not at compile time.
 - `enhancementPhase` or `enhancementPhaseParamRefName` say when the processor runs; see
   [Phases](#phases).
 
@@ -71,14 +81,17 @@ element carries
 
 The descriptor records facts about the annotated code, never what a feature makes of them. A
 `ClassTarget` has the class name, its `assignableTypes` (itself plus every supertype except
-`Any`), the attributes on the class, the constructor parameters (each a `Parameter`: type plus the
-attributes on it) and an `Instantiator`. A `FunctionTarget` has the declaring class (Kotlin and JVM
+`Any`), the attributes on the class, the constructor parameters (each a `Parameter`: type, the
+attributes on it, `optional` when it has a default value, and `suppliedBy` naming the processor
+that supplies the argument instead of a bean, as `ConfigProcessors.VALUE` does for a `@Value`
+constructor property) and an `Instantiator`. A `FunctionTarget` has the declaring class (Kotlin and JVM
 names), the function name, who holds the instance (`MemberOwner`: `PLUGIN`, `OBJECT` or
 `INSTANCE` for a class whose instance the processor must obtain), the attributes on the function,
 its parameters, an `Invoker` and the attributes on the declaring class (`classAnnotations`, for
 what applies to a whole class). A `PropertyTarget` has the same owner facts for a mutable
-property, its type as a `TypeReference` (qualified name, type arguments, nullability) and a
-`Setter`. A `PluginTarget` describes the main class: name, assignable types
+property, its type as a `TypeReference` (qualified name, type arguments, nullability), a
+`Setter` and, for a property declared in a bean's primary constructor, `constructorParameter`, the
+index of that parameter. A `PluginTarget` describes the main class: name, assignable types
 and attributes, nothing to construct. Bean names, `@Primary` and qualifiers are not fields: the DI
 processor derives them from the recorded attributes.
 
@@ -93,7 +106,7 @@ walk it. Changing how VersatiaCore iterates therefore never requires regeneratin
 ### Format version
 
 The format has its own `major.minor` version (`VersatiaPluginDescriptor.FORMAT_VERSION`, currently
-`1.1`), independent of the library version. A runtime accepts exactly the version it was built
+`1.2`), independent of the library version. A runtime accepts exactly the version it was built
 with and rejects any other with a message naming the plugin, both versions and the fix. The
 generator writes the two numbers as literal `Int` properties (`formatMajor`, `formatMinor`), so a
 runtime can read them from any descriptor before deciding what to do with it; for the same reason
@@ -105,15 +118,24 @@ nothing the elements refer to.
 Encapsulation is preserved: beans, their constructors, functions and their parameter types may be
 `private`. The generator picks per element:
 
-- **`Instantiator.Direct` / `Invoker.Direct`** when the class, the member and every parameter type
-  are `public` or `internal`. The generated code contains the call itself:
-  `Instantiator.Direct { args -> Spy(args[0] as Secret) }`. No reflection, no `setAccessible`.
+- **`Instantiator.Direct` / `Invoker.Direct` / `Setter.Direct`** when the class, the member and every
+  parameter type are `public` or `internal`; for a property, its type and type arguments too, and
+  the accessor the generated code uses (the setter, or the getter of a `val` holding a
+  `PreviousValueTracking`) must not be `private` or `protected`. The generated code contains the
+  call itself: `Instantiator.Direct { args -> Spy(args[0] as Secret) }`. No reflection, no
+  `setAccessible`.
 - **`Instantiator.Reflective` / `Invoker.Reflective` / `Setter.Reflective`** otherwise. They store JVM binary names
   (`com.example.Outer$Hidden`) and at runtime load the class **without initialising it**
   (`Class.forName(name, false, loader)`), find the matching declared member and make it accessible.
+  Functions are recorded under the name and parameter types the JVM sees, so an `internal`
+  function (`start$module`), a `@JvmName` and value-class parameters are found as compiled.
   A property whose setter is `private` or `protected` is reflective even when the property is visible;
   a direct setter of a generic property casts unchecked, so the generated object carries
   `@Suppress("UNCHECKED_CAST")` when one exists.
+- A constructor with an optional parameter gets `Instantiator.WithDefaults(binaryName, parameterTypes)`,
+  reachable or not: it calls the constructor through Kotlin reflection (`callBy`) and leaves out
+  every argument given as `DefaultArgument`, so the parameter keeps its default. A direct call
+  casts generic `@Value` constructor arguments unchecked, which the `@Suppress` covers too.
 - A Kotlin `object` enhanced through a subclass enhancement gets `Instantiator.Direct { _ -> Console }`
   when it is reachable and `Instantiator.ObjectInstance(binaryName)`, which reads its `INSTANCE`
   field, otherwise.
@@ -137,9 +159,11 @@ fun start()
 
 `EventType._NULL` and `""` are the defaults and mean "not given"; annotations cannot hold `null`.
 With `enhancementPhaseParamRefName`, the named property must exist on the annotated annotation and
-be of type `EventType`, and every occurrence must set it to something other than `_NULL`. When the
-scope is inherited (`@Service` inherits `@LocalBean`), the value is read from the occurrence that
-links the two, that is from the `@LocalBean(...)` written on the declaration of `Service`.
+be of type `EventType`, and every occurrence must set it to something other than `_NULL`. When
+another annotation inherits such an enhancement by carrying it, the value is read from the
+occurrence that links the two, that is from the enhancement annotation as written on the
+declaration of the inheriting annotation. A fixed phase, as on `@LocalBean`, is the same for every
+annotation inheriting it.
 
 The processor stops the build when a `@VersatiaEnhancement` sets both or neither, names a property
 the annotation does not declare, names one of another type, leaves `processorClass` empty, or an
@@ -149,7 +173,7 @@ the sources, otherwise at the class using it.
 | `EventType`              | Runs at                          |
 |--------------------------|----------------------------------|
 | `PLUGIN_START_ONLY`      | plugin enable                    |
-| `PLUGIN_RELOAD_ONLY`     | `/versatia reload`, `VersatiaEngine.reload` |
+| `PLUGIN_RELOAD_ONLY`     | `/versatia reload`, `plugin.versatiaReload()`, `VersatiaEngine.reload(name)` |
 | `PLUGIN_RELOAD_OR_START` | both of the above                |
 | `PLUGIN_STOP`            | plugin disable                   |
 
@@ -198,7 +222,13 @@ class. The DI processors publish it in the plugin state under `BeanResolver.KEY`
 `@AutoInvoke` is its first client; a processor shipped by another plugin uses it the same way.
 
 Beans use constructor injection only. A dependency is matched against the *assignable types* of
-the candidate beans, so a parameter may be typed by an interface the bean implements.
+the candidate beans, so a parameter may be typed by an interface the bean implements. A
+constructor parameter with a default value is optional: when no bean, local or exposed, provides
+its type, `resolve` returns `DefaultArgument` and the parameter keeps its default; when one does,
+it is injected. This holds for listeners and other classes the runtime creates as well; a function
+parameter is always required. A `@Value` constructor property is not a dependency at all: its
+`Parameter` names the `@Value` processor in `suppliedBy`, which hands the value to
+`BeanResolver.supply` before the beans are created (see [Configuration values](#configuration-values)).
 
 ### Reloadable beans
 
@@ -331,19 +361,21 @@ object VersatiaDescriptor : VersatiaPluginDescriptor {
     get() = listOf(
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.PluginBeanEnhancementProcessor",
-        phase = EventType.PLUGIN_START_ONLY,
+        phase = EventType.PLUGIN_RELOAD_OR_START,
         annotation = AnnotationOccurrence("com.github.marcoral.versatia.di.PluginBean"),
         target = PluginTarget(
           className = "com.example.alpha.AlphaPlugin",
           assignableTypes = listOf("com.example.alpha.AlphaPlugin", "com.github.marcoral.versatia.VersatiaPlugin", "org.bukkit.plugin.java.JavaPlugin", "org.bukkit.plugin.Plugin", /* ... */),
           annotations = emptyList(),
         ),
+        origin = "com.github.marcoral.versatia.VersatiaPlugin",
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.resources.ExtractResourcesEnhancementProcessor",
         phase = EventType.PLUGIN_START_ONLY,
         annotation = AnnotationOccurrence("com.github.marcoral.versatia.resources.ExtractResources"),
         target = PluginTarget(/* the same */),
+        origin = "com.github.marcoral.versatia.VersatiaPlugin",
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.LocalBeanEnhancementProcessor",
@@ -356,6 +388,7 @@ object VersatiaDescriptor : VersatiaPluginDescriptor {
           constructorParameters = listOf(Parameter("com.example.alpha.Clock")),
           instantiator = Instantiator.Direct { args -> ConsoleGreeter(args[0] as Clock) },
         ),
+        origin = "com.example.alpha.ConsoleGreeter",
       ),
       EnhancedElement(
         processorClass = "com.github.marcoral.versatia.di.LocalBeanEnhancementProcessor",
@@ -371,8 +404,9 @@ object VersatiaDescriptor : VersatiaPluginDescriptor {
           ),
           instantiator = Instantiator.Reflective("com.example.alpha.HiddenAudit", listOf("com.example.alpha.Greeter", "com.example.alpha.Ticket")),
         ),
+        origin = "com.example.alpha.HiddenAudit",
       ),
-      // Clock, Ticket ...
+      // Clock, Ticket, the listeners of @RegisterListeners ...
     )
 }
 ```
@@ -390,19 +424,28 @@ generates nothing when any of them fires:
   on a class that is not a bean;
 - a class with more than one scope annotation, or a scope annotation or `@Qualifier` on the
   plugin's main class;
-- a bean that is abstract, an `object`, an interface, an inner class, or generic;
-- a bean without exactly one constructor;
+- a bean that is abstract or sealed, an `object`, an enum class, an interface, an inner class, or
+  generic;
+- a bean or a class matched by a subclass enhancement with neither a primary constructor nor
+  exactly one constructor (with a primary constructor, it is the one injected and secondary
+  constructors are ignored);
 - a nullable, generic, vararg or type-parameter dependency;
 - a prototype whose plugin parameter is not `VersatiaPlugin` or a supertype: it receives the
   consuming plugin, so the owner's own class would not fit every consumer;
-- an attribute argument the descriptor cannot hold;
-- a plugin enhancement or a `@DisableVersatiaFeatures` on a class that is not a `JavaPlugin`
-  subclass, a switch that turns nothing off, or a class that both carries and switches off the
+- an attribute argument the descriptor cannot hold, or an empty `@Qualifier` on a bean or a
+  parameter;
+- a plugin enhancement or a `@DisableVersatiaFeatures` on a class that is neither the main class
+  nor one of its supertypes, a switch that turns nothing off, or a class that both carries and switches off the
   same enhancement;
-- a class matched by a subclass enhancement that is inner, generic or has more than one
-  constructor, or whose constructor parameters are not injectable;
-- an enhanced property that is a `val`, an extension or abstract property, top-level, or declared
-  in a class that is neither the main class, an object nor a bean; a `@Value` property whose type
+- a class matched by a subclass enhancement that is inner, generic, an enum class or a companion
+  object, or whose constructor parameters are not injectable;
+- a `@VersatiaSubclassEnhancement` without `processorClass`, without a class in `subclassOf`, or
+  with its phase left at `_NULL`;
+- an enhanced function or property carrying more than one enhancement, and an enhanced top-level
+  function, which has no owner to call it on;
+- an enhanced property that is a `val` (other than one holding a `PreviousValueTracking`), an
+  extension or abstract property, top-level, or declared in a class that is neither the main class,
+  an object nor a bean, or whose type the descriptor cannot record; a `@Value` property whose type
   is not in `ValueTypes` and has no mapper, or whose mapper cannot be created or maps to a type the
   property cannot hold, or a nullable `PreviousValueTracking` (see [Configuration values](#configuration-values));
 - a scope annotation that inherits `@Bean` but no `@VersatiaEnhancement`, or one that sends a
@@ -412,8 +455,25 @@ generates nothing when any of them fires:
 - `@FriendlyName` off the main class or not one word, and `@ConditionalOnPlugin` where it would
   have no effect (see [Conditional elements](#conditional-elements)).
 
-A dependency that no local bean provides is **not** an error: it is expected to come from a bean
-exposed by a plugin loaded earlier, and the runtime reports it if it does not.
+- a dependency all of whose local providers `@ConditionalOnPlugin` may skip, from a bean, function
+  or class whose own conditions (its own and those of its declaring class) do not include the same
+  plugins: `X depends on Y, which exists only with @ConditionalOnPlugin("Vault"); make X conditional
+  on the same plugins or declare a provider without the condition`. A skipped bean does not exist,
+  so a provider without the condition stands in for it and `@Primary` counts only among the
+  providers that exist; the check walks every combination of the plugins involved and reports a
+  choice that becomes ambiguous `while "Vault" is enabled`. An optional constructor parameter is
+  never an error for lack of a provider, only for ambiguity;
+- a dependency no plugin can ever provide: a type declared in the plugin's own sources that no
+  local bean provides (plugins loaded earlier cannot see it), the main class without `@PluginBean`,
+  or a final class that no exposing bean scope annotates;
+- a type the processor reads that does not resolve: the processor waits for later rounds, in case
+  another processor generates it, and reports `Type X cannot be resolved` after the last one.
+
+Type aliases are followed everywhere a type is read: injected parameters, `@Value` types,
+supertypes and annotation arguments. Any other dependency that no local bean provides is **not**
+an error: it is expected to come from a bean exposed by a plugin loaded earlier, and the runtime
+reports it if it does not. The generated `elements` list is built in private functions of at most
+50 elements each, so a large plugin stays within the JVM's 64 KB method limit.
 
 ## Auto-invoked functions
 
@@ -467,15 +527,17 @@ class Shop {
 ```
 
 - The property may belong to the plugin's main class, to a Kotlin `object`, or to a bean, like an
-  auto-invoked function, and must be a `var`; a `val`, a top-level property or one of a plain
-  class is a compile error. `config.PropertyCollector` applies the rules; it is generic over
+  auto-invoked function, and must be a `var`, or a `val` holding a `PreviousValueTracking` (below);
+  any other `val`, a top-level property or one of a plain class is a compile error. `config.PropertyCollector` applies the rules; it is generic over
   enhancements on properties, with the type check being the one `@Value`-specific part.
 - Without a mapper the type must be one of `ValueTypes` (`config`): the scalars read by the strict
   getters (`Boolean`, `Int`, `Long`, `Float`, `Double`, `UInt`, `ULong`, `String`, `Percent`), any
   enum, the Bukkit types with their own deserialisation (`Color`, `Location`, `OfflinePlayer`,
   `Vector`, `ItemStack`, `ConfigurationSection`), `List` or `Set` of a scalar or enum, `Map` from
-  `String` to one, and any of them nullable, which makes the value optional. The API lists them
-  by name because the compile-time step has no Paper API on its classpath.
+  `String` to one, and any of them nullable, which makes the value optional. Lists and sets are
+  read with the strict list getters, so a single value where a list is expected and an element of
+  the wrong type are errors, never an empty or shortened list. The API lists the types by name
+  because the compile-time step has no Paper API on its classpath.
 - With a mapper the property may have any type: a `ValueMapper<T>` (`config`) is an `object` or a
   class with a no-argument constructor whose `map(section, key)` reads the value with the strict
   getters and returns `T`; the compile-time step checks that the property can hold `T`. `NoMapper`
@@ -491,6 +553,16 @@ class Shop {
   (`Limits.max.value = value as Int`) or `Setter.Reflective(owner, "max", "value")`, which reads
   the property and sets the named member of what it holds. The compile-time check applies to `T`;
   the cell itself must not be nullable.
+- A bean may declare the property in its primary constructor: `@Value("shop.name") var name:
+  String` receives the value before the bean exists, and `@Value("shop.slots") val slots:
+  PreviousValueTracking<Int>` receives a cell already holding it; both are updated at every reload
+  like any other `@Value` property. A constructor `val` of any other type is rejected like any
+  `val` (`Shop.x must be a var to be enhanced`), and so is a parameter that declares no property
+  (`Shop.x must be a var to be enhanced; declare the constructor parameter as a property`); an
+  enhancement on a function parameter is an error too (`Parameter x of Shop.f() cannot be
+  enhanced; only properties can, constructor properties included`). The type rules are those of
+  any `@Value` property. The `PropertyTarget` records `constructorParameter`, and the bean's
+  `Parameter` at that index names `ConfigProcessors.VALUE` in `suppliedBy`.
 - The element is a `PropertyTarget` with the owner kind, the `TypeReference` and a `Setter`,
   direct (`Setter.Direct { instance, value -> (instance as Shop).tax = value as Percent }`) or
   reflective; the mapper is recorded as the annotation's `mapper` argument, by class name.
@@ -503,8 +575,9 @@ class Shop {
 ## Enhancements of the main class
 
 Class enhancements written on the main class, or on any of its supertypes, produce one
-`PluginTarget` element each. `VersatiaPlugin` carries `@PluginBean` and `@ExtractResources`, which
-is how every Versatia plugin gets its bean container and its resources without declaring anything;
+`PluginTarget` element each. `VersatiaPlugin` carries `@PluginBean`, `@ExtractResources` and
+`@RegisterListeners`, which is how every Versatia plugin gets its bean container, its resources and
+its listeners without declaring anything;
 an abstract base plugin in a library can add enhancements for the plugins extending it the same
 way. The `PluginTarget` is the same for all of them: class name, assignable types and attributes,
 nothing to construct. A processor that expects the main class accepts only that target and only
@@ -517,8 +590,9 @@ classes below the one carrying it: each of its `Boolean` parameters is marked
 `@VersatiaDisabler(Enhancement::class)`, and a parameter set to `true` leaves that enhancement
 out, unless a class nearer to the main class declares it again. The collector knows no feature;
 it reads the mapping from the parameter annotations, so a library can define a switch for its own
-base-class enhancements the same way. Plugin enhancements and switches are accepted only on
-`JavaPlugin` subclasses: elsewhere they would do nothing, so they are compile errors, as is a
+base-class enhancements the same way. Plugin enhancements and switches are accepted only on the
+main class and its supertypes, interfaces included: elsewhere they would do nothing, so they are
+compile errors, as is a
 switch that turns nothing off and a class that both carries and switches off an enhancement.
 
 ## Subclass enhancements
@@ -529,7 +603,8 @@ every class in the plugin's sources that is assignable to `subclassOf` an elemen
 annotation had been written on that class: concrete classes with one injectable constructor become
 `ClassTarget`s like beans (validated the same way, dependencies checked by the bean graph
 validator), objects become `ClassTarget`s with an object instantiator, the main class becomes its
-`PluginTarget`; abstract classes and interfaces are skipped. The annotation carrying it is written
+`PluginTarget`; abstract and sealed classes and interfaces are skipped, while an enum class, a
+companion object, an inner or a generic class is a compile error. The annotation carrying it is written
 on the main class or on a base class of it, follows the lineage rules above (nearest declaration,
 `@DisableVersatiaFeatures`), and is recorded as each element's `origin`:
 
@@ -579,23 +654,31 @@ the plugin under that name instead of the `name:` of `plugin.yml`, and `/versati
 addresses it so. The descriptor records it on the `PluginTarget` like any attribute; the runtime
 reads it from there when the plugin starts. `AttributePlacement` rejects it on any other class and
 a name that is not one word. `VersatiaPlugin.versatiaReload()` runs the plugin's own reload event
-through the engine, so plugin code never looks the service up itself; where the engine is needed
-directly, `VersatiaEngine.instance` (`getInstance()` from Java) is the one lookup. `PluginRegistry` (root
-package) is the read side: the running plugins
-by friendly name, `friendlyNames`, `friendlyNameOf(plugin)` and `get(name)`; VersatiaCore
-implements it, returns it from `VersatiaEngine.registry` and exposes it as a singleton bean.
+through the engine, so plugin code never looks the service up itself; another plugin reloads
+with `VersatiaEngine.reload(name)`, a shortcut over `VersatiaEngine.instance.reload(plugin)`, the
+third operation of the engine next to `enhance` and `disable` (`getInstance()` from Java).
+`PluginRegistry` (root package) is the read side: the running plugins by friendly name,
+`friendlyNames`, `friendlyNameOf(plugin)`, `get(name)` and `getOrThrow(name)`, whose exception
+lists the running names; VersatiaCore implements it, returns it from the engine's `registry`
+(`VersatiaEngine.registry` statically) and exposes it as a singleton bean.
 
 ## Conditional elements
 
 `@ConditionalOnPlugin("Vault")` (root package) is an attribute on a bean or listener class, on an
-`object` or class declaring enhanced functions, or on an enhanced function. The runtime dispatches
-the element only while every named plugin is enabled; a function element carries the attributes of
-its declaring class in `classAnnotations`, so the condition on a class or object covers its
-functions. The class behind a skipped element is never loaded, so it may reference the optional
-plugin's classes freely. `AttributePlacement` rejects the attribute on the main class, on a class
-that is neither an element nor declares an enhanced function, on a function without an
-enhancement, and with no plugin named. `VersatiaEngine.reload(plugin)` is the
-third operation of the engine, next to `enhance` and `disable`.
+`object` or class declaring enhanced functions or properties (`@Value` among them), or on an
+enhanced function. The runtime dispatches the element only while every named plugin is enabled;
+function and property elements carry the attributes of their declaring class in
+`classAnnotations`, so the condition on a class or object covers its functions and its values. A
+class whose elements are all skipped is never loaded, so it may reference the optional plugin's
+classes freely; on a function, only the call is skipped and the declaring class is loaded as usual.
+`AttributePlacement` rejects the attribute on the main class (`@ConditionalOnPlugin cannot apply to
+X, the plugin's main class`), on a class that is neither an element nor declares an enhanced
+function or property (`@ConditionalOnPlugin on X has no effect: X is not enhanced and declares no
+enhanced function or property`), on a function without an enhancement, and with no plugin named.
+
+The condition may also come through an annotation class, like any attribute:
+`@ConditionalOnPlugin("Vault") annotation class NeedsVault` makes `@NeedsVault` a condition. The
+attribute is repeatable, so `@NeedsVault @ConditionalOnPlugin("CommandAPI")` requires both plugins.
 
 ## Setting up a plugin build
 
@@ -643,7 +726,8 @@ The module mirrors the feature packages of the API: `ksp` holds what every featu
 1. `VersatiaSymbolProcessor` runs once per compilation. `MainClassLocator` finds the plugin's main
    class (or reads it from `plugin.yml` when the option is set). `EnhancementResolver` resolves
    the enhancements an annotation inherits; `Attributes` records attribute occurrences and turns
-   annotation arguments into descriptor values; `PluginCollector` gathers the enhancement
+   annotation arguments into descriptor values; `AttributePlacement` checks where the attributes the
+   runtime reads itself (`@FriendlyName`, `@ConditionalOnPlugin`) are written; `PluginCollector` gathers the enhancement
    annotations on the main class and its supertypes, applies the switches of
    `@DisableVersatiaFeatures` and checks where both are used; `SubclassCollector` turns the
    subclass enhancements among them into elements for the matching source classes.

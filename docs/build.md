@@ -45,8 +45,9 @@ The `java-library` plugin provides dependency scopes that control what consumers
   runtime classpath, because the server provides it.
 - `kotlin-stdlib` and `kotlin-reflect` are `api`. Consumers get them on both classpaths; the
   versions are aligned with the Kotlin Gradle plugin version through the Kotlin BOM constraints
-  that the plugin adds. `kotlin-reflect` is required by the `util.reflect` package. Plugins that use
-  it must also ship it at runtime through `plugin.yml` `libraries:`; see
+  that the plugin adds. `kotlin-reflect` is required by the `util.reflect` package. On the server
+  both come from VersatiaCore, which lists them under `libraries:`; a plugin must not list them
+  itself, or it exchanges Kotlin classes with VersatiaCore across two copies; see
   [api.md](api.md#runtime-requirement).
 
 Anything the public API exposes in signatures must be `api` or `compileOnlyApi`. Internal
@@ -73,7 +74,9 @@ uses `useJUnitPlatform()`. `junit-platform-launcher` is declared as `testRuntime
 longer adds it automatically.
 
 - `api`: `paper-api` is added as `testImplementation` so tests can use `YamlConfiguration` and
-  other server-independent Bukkit classes at runtime. It stays `compileOnlyApi` for consumers.
+  other server-independent Bukkit classes at runtime. It stays `compileOnlyApi` for consumers, so a
+  plugin's own unit tests compile against it but fail with `NoClassDefFoundError` until the plugin
+  build adds `testImplementation("io.papermc.paper:paper-api:...")` as well.
 - `ksp`: `dev.zacsweers.kctfork:ksp` (a maintained fork of `kotlin-compile-testing`) compiles
   sample plugin sources with the processor in-process and exposes the generated files and the
   compiled classes. Its API is marked `@ExperimentalCompilerApi`, hence the `@OptIn` on the test

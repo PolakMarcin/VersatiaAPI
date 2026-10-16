@@ -1,6 +1,10 @@
 package com.github.marcoral.versatia
 
-/** Identifies one entry of a [StateStore]; the type parameter is the entry's type. */
+/**
+ * Identifies one entry of a [StateStore]; the type parameter is the entry's type. Keys compare by
+ * identity, not by [name]: declare each key once, in a companion or an `object`, and share that
+ * instance, as `BeanResolver.KEY` is shared between processors of different plugins.
+ */
 class StateKey<T : Any>(val name: String) {
     override fun toString() = name
 }

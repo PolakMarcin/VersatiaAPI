@@ -4,7 +4,11 @@ import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 
-/** Raw slot indices of the armor and off-hand slots in a player inventory. */
+/**
+ * `PlayerInventory` indices of the armor and off-hand slots, as `PlayerInventory.getItem(Int)` and
+ * `InventoryClickEvent.slot` use them; not raw slots (`InventoryClickEvent.rawSlot`), which number
+ * the whole view and put the armor at 5-8 and the off hand at 45 in the player's own inventory.
+ */
 object PlayerInventorySlots {
     const val BOOTS = 36
     const val LEGGINGS = 37
@@ -13,7 +17,7 @@ object PlayerInventorySlots {
     const val OFF_HAND = 40
 }
 
-/** Maps a raw player-inventory slot index to the equipment slot it holds, or null for storage/hotbar slots. */
+/** Maps a `PlayerInventory` index (see [PlayerInventorySlots]) to the equipment slot it holds, or null for storage and hotbar slots. */
 fun Int.toEquipmentSlotOrNull() = when (this) {
     PlayerInventorySlots.HELMET -> EquipmentSlot.HEAD
     PlayerInventorySlots.CHESTPLATE -> EquipmentSlot.CHEST

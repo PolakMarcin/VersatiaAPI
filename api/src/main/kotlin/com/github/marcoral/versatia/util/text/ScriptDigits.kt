@@ -5,10 +5,10 @@ private const val SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
 private const val SUBSCRIPT_MINUS = '₋'
 private const val SUPERSCRIPT_MINUS = '⁻'
 
-/** Converts a string of digits with an optional leading minus sign to its subscript form. */
+/** Converts a string of ASCII digits with an optional leading minus sign to its subscript form. */
 fun String.toSubscript() = mapDigits(SUBSCRIPT_DIGITS, SUBSCRIPT_MINUS)
 
-/** Converts a string of digits with an optional leading minus sign to its superscript form. */
+/** Converts a string of ASCII digits with an optional leading minus sign to its superscript form. */
 fun String.toSuperscript() = mapDigits(SUPERSCRIPT_DIGITS, SUPERSCRIPT_MINUS)
 
 fun Int.toSubscript() = toString().toSubscript()
@@ -25,8 +25,8 @@ private fun String.mapDigits(digits: String, minus: Char) = buildString(length) 
     this@mapDigits.forEachIndexed { index, char ->
         append(
             when {
-                char.isDigit() -> digits[char.digitToInt()]
-                char == '-' && index == 0 -> minus
+                char in '0'..'9' -> digits[char - '0']
+                char == '-' && index == 0 && this@mapDigits.length > 1 -> minus
                 else -> throw IllegalArgumentException("Not an integer string: \"${this@mapDigits}\"")
             },
         )

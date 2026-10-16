@@ -16,22 +16,33 @@ internal data class Enhancement(val processorClass: String, val phase: EventType
 internal data class SubclassEnhancement(val processorClass: String, val phase: EventType, val subclassOf: ClassName)
 
 /**
- * An enhancement annotation as written at one place together with what it resolves to: the
- * enhancements of the annotated class and the subclass enhancements it declares. [origin] is the
- * class the annotation is written on, when that is not the element's own target.
+ * An enhancement annotation as written on the main class or one of its supertypes together with
+ * what it resolves to: the enhancements of the main class and the subclass enhancements it
+ * declares. [origin] is the class the annotation is written on.
  */
 internal data class EnhancedAnnotation(
     val annotation: AnnotationRef,
     val enhancements: List<Enhancement>,
     val subclassEnhancements: List<SubclassEnhancement> = emptyList(),
-    val origin: ClassName? = null,
+    val origin: ClassName,
 )
 
 /** An annotation as written at one place, with its arguments as descriptor values. */
 internal data class AnnotationRef(val type: ClassName, val arguments: Map<String, Any?> = emptyMap())
 
-/** A constructor or function parameter with the attributes recorded on it. */
-internal data class ParameterDeclaration(val type: ClassName, val annotations: List<AnnotationRef> = emptyList())
+/**
+ * A constructor or function parameter with the attributes recorded on it, its type as
+ * `Class.getName` reports it and as generated code casts to it, whether it has a default value,
+ * and the processor that supplies its argument instead of a bean, if any.
+ */
+internal data class ParameterDeclaration(
+    val type: ClassName,
+    val annotations: List<AnnotationRef> = emptyList(),
+    val jvmType: String = type.reflectionName(),
+    val typeName: TypeName = type,
+    val optional: Boolean = false,
+    val suppliedBy: String? = null,
+)
 
 /** A type as written on a property: the facts a `TypeReference` records, and the Kotlin type the generated code casts to. */
 internal data class TypeDeclaration(val type: ClassName, val arguments: List<TypeDeclaration> = emptyList(), val nullable: Boolean = false) {
@@ -72,9 +83,14 @@ internal data class FunctionDeclaration(
     val node: KSNode? = null,
     /** The attributes written on the declaring class. */
     val classAnnotations: List<AnnotationRef> = emptyList(),
+    /** The method name the JVM knows, which differs for `internal` functions, `@JvmName` and value-class parameters. */
+    val jvmName: String = name,
 )
 
-/** A mutable property carrying an enhancement, such as `@Value`; the runtime sets it. */
+/**
+ * A property carrying an enhancement, such as `@Value`: a `var` the runtime sets, or a `val` whose
+ * held object the runtime stores into through [via].
+ */
 internal data class PropertyDeclaration(
     val owner: ClassName,
     val ownerKind: MemberOwner,
@@ -90,7 +106,12 @@ internal data class PropertyDeclaration(
     val classAnnotations: List<AnnotationRef> = emptyList(),
     /** The mutable property of the object the property holds that receives the value, when the property itself is not assigned. */
     val via: String? = null,
-)
+    /** The index of the bean's constructor parameter the property is declared by, if any. */
+    val constructorParameter: Int? = null,
+) {
+    /** The type of the value the setter stores: the property's own, or the one its held cell takes. */
+    val stored get() = if (via == null) type else type.arguments.single()
+}
 
 internal data class DescriptorModel(
     val packageName: String,
@@ -99,4 +120,6 @@ internal data class DescriptorModel(
     val plugin: PluginDeclaration? = null,
     val subclasses: List<SubclassElement> = emptyList(),
     val properties: List<PropertyDeclaration> = emptyList(),
+    /** Simple names declared in [packageName] that would shadow the default imports of the generated file. */
+    val shadowedNames: Set<String> = emptySet(),
 )

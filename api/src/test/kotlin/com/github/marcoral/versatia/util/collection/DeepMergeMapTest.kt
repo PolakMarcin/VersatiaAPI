@@ -63,6 +63,27 @@ class DeepMergeMapTest {
     }
 
     @Test
+    fun `nested values are copied, never shared with the caller or between copies`() {
+        val callerNested = mutableMapOf<String, Any?>("a" to 1)
+        val base = DeepMergeMap(mapOf("nested" to callerNested, "untouched" to mapOf("x" to 1), "set" to setOf(1)))
+        callerNested["a"] = 2
+        assertEquals(mapOf("a" to 1), base["nested"])
+
+        val merged = base.mergedWith(mapOf("set" to setOf(1)))
+        @Suppress("UNCHECKED_CAST")
+        val untouched = merged["untouched"] as MutableMap<String, Any?>
+        untouched["x"] = 2
+        assertEquals(mapOf("x" to 1), base["untouched"])
+        assertEquals(listOf(1, 1), merged["set"])
+
+        val incomingNested = mutableMapOf<String, Any?>("b" to 1)
+        val combined = DeepMergeMap(mapOf("l" to listOf(1)), MergeConflictStrategy.COMBINE_INTO_LIST)
+        combined += mapOf("l" to incomingNested)
+        incomingNested["b"] = 2
+        assertEquals(listOf(1, mapOf("b" to 1)), combined["l"])
+    }
+
+    @Test
     fun `equals hashCode and toString follow the map contract`() {
         val map = DeepMergeMap(mapOf("a" to 1))
         assertMapEquals(mapOf("a" to 1), map)

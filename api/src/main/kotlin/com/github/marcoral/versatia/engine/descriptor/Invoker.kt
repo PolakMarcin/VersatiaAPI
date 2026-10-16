@@ -1,6 +1,7 @@
 package com.github.marcoral.versatia.engine.descriptor
 
 import com.github.marcoral.versatia.EnhancementException
+import com.github.marcoral.versatia.util.reflect.forceAccessible
 import java.lang.reflect.InvocationTargetException
 
 sealed interface Invoker {
@@ -20,13 +21,13 @@ sealed interface Invoker {
         val parameterBinaryClassNames: List<String>,
     ) : Invoker {
         override fun invoke(classLoader: ClassLoader, instance: Any, arguments: List<Any?>) {
-            val clazz = Class.forName(binaryClassName, false, classLoader)
+            val clazz = loadDescribedClass(binaryClassName, false, classLoader)
             val method = clazz.declaredMethods
                 .firstOrNull { it.name == methodName && it.parameterTypes.map { type -> type.name } == parameterBinaryClassNames }
+                ?.forceAccessible()
                 ?: throw EnhancementException(
                     "$binaryClassName has no method $methodName(${parameterBinaryClassNames.joinToString()})",
                 )
-            method.isAccessible = true
             try {
                 method.invoke(instance, *arguments.toTypedArray())
             } catch (e: InvocationTargetException) {

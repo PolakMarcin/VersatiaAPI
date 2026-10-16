@@ -20,6 +20,8 @@ fun List<Component>.withoutDefaultItemFormat() = map {
     it.decorationIfAbsent(TextDecoration.ITALIC, TextDecoration.State.FALSE).colorIfAbsent(NamedTextColor.WHITE)
 }
 
+/** Sets [lore] without the client's default lore styling; see [withoutDefaultItemFormat]. */
 fun ItemStack.loreWithoutDefaultFormat(lore: List<Component>?) = lore(lore?.withoutDefaultItemFormat())
 
+/** Sets [lore] without the client's default lore styling; see [withoutDefaultItemFormat]. */
 fun ItemMeta.loreWithoutDefaultFormat(lore: List<Component>?) = lore(lore?.withoutDefaultItemFormat())

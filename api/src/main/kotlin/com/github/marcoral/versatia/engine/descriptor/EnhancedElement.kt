@@ -18,25 +18,36 @@ data class EnhancedElement(
 )
 
 /**
- * An annotation as written at one place. Arguments hold strings, booleans, numbers, chars, enum
- * entry names, class names and lists of those; defaults are included.
+ * An annotation as written at one place. [annotationClass] is the Kotlin qualified name.
+ * Arguments hold strings, booleans, numbers, chars, enum entry names, class names (Kotlin
+ * qualified names) and lists of those; defaults are included.
  */
 data class AnnotationOccurrence(
     val annotationClass: String,
     val arguments: Map<String, Any?> = emptyMap(),
 )
 
-/** The occurrence of [annotationClass] among these, if any. */
+/** The occurrence of [annotationClass], a Kotlin qualified name (`Outer.Inner`, not `Outer$Inner`), among these, if any. */
 fun List<AnnotationOccurrence>.occurrenceOf(annotationClass: String) = firstOrNull { it.annotationClass == annotationClass }
+
+/** The occurrence of [A] among these, if any; matches the recorded name of a nested annotation too. */
+inline fun <reified A : Annotation> List<AnnotationOccurrence>.occurrenceOf() = occurrenceOf(A::class.qualifiedName!!)
 
 sealed interface ElementTarget {
     val className: String
 }
 
-/** A constructor or function parameter: its type and the recorded annotations on it. */
+/**
+ * A constructor or function parameter: its type and the recorded annotations on it. An [optional]
+ * constructor parameter has a default value, which it keeps when no bean provides its type. A
+ * parameter with [suppliedBy] is not injected: that processor supplies its argument, as the
+ * `@Value` processor does for a constructor property.
+ */
 data class Parameter(
     val type: String,
     val annotations: List<AnnotationOccurrence> = emptyList(),
+    val optional: Boolean = false,
+    val suppliedBy: String? = null,
 )
 
 /** A type as written on a property: a Kotlin qualified name, its type arguments and whether it accepts `null`. */
@@ -103,4 +114,9 @@ data class PropertyTarget(
     val setter: Setter,
     /** The attributes written on the declaring class; what applies to a whole class is read from here. */
     val classAnnotations: List<AnnotationOccurrence> = emptyList(),
+    /**
+     * For a property declared in the primary constructor of a bean, the index of that constructor
+     * parameter: its value is passed to the constructor when the bean is created.
+     */
+    val constructorParameter: Int? = null,
 ) : ElementTarget

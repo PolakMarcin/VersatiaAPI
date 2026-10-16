@@ -10,10 +10,8 @@ import com.github.marcoral.versatia.ksp.model.ParameterDeclaration
 import com.google.devtools.ksp.symbol.KSNode
 import com.squareup.kotlinpoet.ClassName
 
-/** A type to inject and, optionally, the name of the bean that must provide it. */
-internal data class DependencyRef(val type: ClassName, val qualifier: String? = null) {
-    override fun toString() = if (qualifier == null) type.canonicalName else "${type.canonicalName} named \"$qualifier\""
-}
+/** A type to inject, optionally the name of the bean that must provide it, and whether a default value stands in when none does. */
+internal data class DependencyRef(val type: ClassName, val qualifier: String? = null, val optional: Boolean = false)
 
 internal data class BeanDeclaration(
     val type: ClassName,
@@ -29,7 +27,7 @@ internal data class BeanDeclaration(
     val reachable: Boolean,
     val node: KSNode? = null,
 ) {
-    val dependencies get() = parameters.map { it.toDependency() }
+    val dependencies get() = parameters.filter { it.suppliedBy == null }.map { it.toDependency() }
 
     /** The facts the descriptor's `ClassTarget` records. */
     fun asClass() = ClassDeclaration(type, annotations, parameters, assignableTypes, reachable, node = node)

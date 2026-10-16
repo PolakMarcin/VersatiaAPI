@@ -19,6 +19,8 @@ abstract class VersatiaPlugin : JavaPlugin() {
 
     final override fun onEnable() = VersatiaEngine.instance.enhance(this)
 
-    // Dependents are disabled before their dependencies, so the engine is still registered
-    final override fun onDisable() = VersatiaEngine.instance.disable(this)
+    // Dependents are disabled first, so the engine is missing only when VersatiaCore never ran, which onEnable reported
+    final override fun onDisable() {
+        VersatiaEngine.loadServiceOrNull<VersatiaEngine>()?.disable(this)
+    }
 }

@@ -25,7 +25,7 @@ sealed interface Setter {
      */
     data class Reflective(val binaryClassName: String, val propertyName: String, val via: String? = null) : Setter {
         override fun set(classLoader: ClassLoader, instance: Any, value: Any?) {
-            val clazz = Class.forName(binaryClassName, false, classLoader)
+            val clazz = loadDescribedClass(binaryClassName, false, classLoader)
             if (via == null) return mutable(clazz.kotlin.declaredMemberProperties, propertyName, binaryClassName).forceSetValue(instance, value)
             @Suppress("UNCHECKED_CAST")
             val property = clazz.kotlin.declaredMemberProperties.firstOrNull { it.name == propertyName } as? KProperty1<Any, Any?>

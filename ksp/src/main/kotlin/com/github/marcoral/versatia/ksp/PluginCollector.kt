@@ -6,11 +6,9 @@ import com.github.marcoral.versatia.VersatiaSubclassEnhancement
 import com.github.marcoral.versatia.di.Bean
 import com.github.marcoral.versatia.ksp.model.EnhancedAnnotation
 import com.google.devtools.ksp.getAllSuperTypes
-import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSNode
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Origin
@@ -25,14 +23,10 @@ import com.squareup.kotlinpoet.ksp.toClassName
  * wins. See docs/enhancements.md.
  */
 internal class PluginCollector(
-    private val logger: KSPLogger,
+    private val reporter: Reporter,
     private val enhancements: EnhancementResolver,
     private val attributes: Attributes,
 ) {
-    private var failed = false
-
-    val hadErrors get() = failed
-
     private val enhancementAnnotation = VersatiaEnhancement::class.qualifiedName!!
     private val subclassAnnotation = VersatiaSubclassEnhancement::class.qualifiedName!!
     private val beanAnnotation = Bean::class.qualifiedName!!
@@ -68,16 +62,17 @@ internal class PluginCollector(
         return result.filter { it.enhancements.isNotEmpty() || it.subclassEnhancements.isNotEmpty() }
     }
 
-    /** Plugin enhancements and switches belong on the main class or on a base class of it; anywhere else they do nothing. */
-    fun validate(files: List<KSFile>) {
-        for (clazz in files.flatMap { it.declarations.flatMap(::classesIn) }) {
-            if (clazz.classKind == ClassKind.ANNOTATION_CLASS || clazz.extendsJavaPlugin()) continue
+    /** Plugin enhancements and switches belong on the main class or on a supertype of it; anywhere else they do nothing. */
+    fun validate(sources: Sources, mainClass: KSClassDeclaration) {
+        val lineage = lineage(mainClass).mapNotNull { it.qualifiedName?.asString() }.toSet()
+        for (clazz in sources.classes) {
+            if (clazz.classKind == ClassKind.ANNOTATION_CLASS || clazz.qualifiedName?.asString() in lineage) continue
             for (annotation in clazz.annotations) {
                 val chain = enhancements.chainOf(annotation)
                 val plugin = chain.isNotEmpty() && !enhancements.inherits(chain, beanAnnotation) &&
                     (enhancements.inherits(chain, enhancementAnnotation) || enhancements.inherits(chain, subclassAnnotation))
                 if (plugin || switchesOf(annotation).isNotEmpty()) {
-                    fail(clazz, "@${annotation.shortName.asString()} on ${clazz.simpleName.asString()} has no effect: it belongs on the plugin's main class or on a base class of it")
+                    fail(clazz, "@${annotation.shortName.asString()} on ${clazz.simpleName.asString()} has no effect: it belongs on the plugin's main class or on a supertype of it")
                 }
             }
         }
@@ -86,10 +81,11 @@ internal class PluginCollector(
     /** The main class, its superclasses nearest first, then the interfaces. */
     private fun lineage(mainClass: KSClassDeclaration): List<KSClassDeclaration> {
         val classes = generateSequence(mainClass) { declaration ->
-            declaration.superTypes.mapNotNull { it.resolve().declaration as? KSClassDeclaration }.firstOrNull { it.classKind == ClassKind.CLASS }
+            declaration.superTypes.mapNotNull { it.resolve().expanded().declaration as? KSClassDeclaration }.firstOrNull { it.classKind == ClassKind.CLASS }
         }.toList()
         val names = classes.map { it.qualifiedName?.asString() }.toSet()
-        return classes + mainClass.getAllSuperTypes().mapNotNull { it.declaration as? KSClassDeclaration }.filter { it.qualifiedName?.asString() !in names }
+        return classes + mainClass.getAllSuperTypes().mapNotNull { it.expanded().declaration as? KSClassDeclaration }
+            .filter { it.qualifiedName?.asString() !in names }.distinctBy { it.qualifiedName?.asString() }
     }
 
     private fun enhancementsOn(declaration: KSClassDeclaration) = declaration.annotations.mapNotNull { annotation ->
@@ -110,12 +106,9 @@ internal class PluginCollector(
     /** The `@VersatiaDisabler` parameters of [annotation]'s class: parameter name to the enhancement annotation it switches off. */
     private fun switchesOf(annotation: KSAnnotation) = annotation.declaration()?.primaryConstructor?.parameters.orEmpty().mapNotNull { parameter ->
         val disabler = parameter.annotations.firstOrNull { it.declaration()?.qualifiedName?.asString() == disablerAnnotation } ?: return@mapNotNull null
-        val enhancement = (disabler.argument("enhancement") as? KSType)?.declaration?.qualifiedName?.asString() ?: return@mapNotNull null
+        val enhancement = (disabler.argument("enhancement") as? KSType)?.expanded()?.declaration?.qualifiedName?.asString() ?: return@mapNotNull null
         parameter.name!!.asString() to enhancement
     }
 
-    private fun fail(node: KSNode, message: String) {
-        failed = true
-        logger.error(message, node)
-    }
+    private fun fail(node: KSNode, message: String) = reporter.fail(node, message)
 }

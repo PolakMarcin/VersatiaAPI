@@ -9,9 +9,11 @@ modules:
 - `api` – the public API that the framework runtime (VersatiaCore, a separate repository)
   implements, syntax sugar over Paper, and the annotations plugins use to declare enhancements;
   today dependency injection (`@LocalBean`, `@ExposeSingleton`, `@ExposePrototype`, `@Qualifier`,
-  `@Primary`), lifecycle hooks (`@AutoInvoke`), resource extraction (`@ExtractResources`),
-  listener registration (`@RegisterListeners`), optional integrations (`@ConditionalOnPlugin`)
-  and friendly plugin names (`@FriendlyName`, read back through `PluginRegistry`),
+  `@Primary`, `Reloadable` beans), lifecycle hooks (`@AutoInvoke`), configuration values (`@Value`,
+  `ValueMapper`, `PreviousValueTracking`), resource extraction (`@ExtractResources`), listener
+  registration (`@RegisterListeners`), optional integrations (`@ConditionalOnPlugin`), friendly
+  plugin names (`@FriendlyName`, read back through `PluginRegistry`) and switches that turn
+  inherited features off (`@DisableVersatiaFeatures`),
 - `ksp` – the compile-time step: a Kotlin Symbol Processing processor that analyses a plugin's
   sources, validates them and generates the descriptor the runtime interprets.
 
@@ -48,15 +50,22 @@ Run this after every change that a dependent project should see. It publishes bo
 ## Using it in a plugin
 
 ```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
+    repositories {
+        mavenLocal { content { includeGroup("com.github.marcoral.versatia") } }
+        mavenCentral()
+        maven("https://repo.papermc.io/repository/maven-public/")
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
 plugins {
     kotlin("jvm") version "2.4.20"
     id("com.google.devtools.ksp") version "2.3.12"
-}
-
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven("https://repo.papermc.io/repository/maven-public/")
 }
 
 dependencies {
@@ -74,18 +83,22 @@ The plugin's main class extends `com.github.marcoral.versatia.VersatiaPlugin` an
 
 Projects that depend on VersatiaAPI inherit the Paper API, the Kotlin standard library and
 `kotlin-reflect` on their compile classpath, so they do not declare those themselves. The Paper
-repository is still required, because Gradle does not inherit repositories from dependencies.
+repository is still required, because Gradle does not inherit repositories from dependencies, and
+so is `testImplementation` of `paper-api` for unit tests that touch Bukkit classes such as
+`YamlConfiguration`: the Paper API is inherited for compilation only.
 See [docs/build.md](docs/build.md) for how this is set up.
 
 ## Project layout
 
 - `api/src/main/kotlin/` – library sources under `com.github.marcoral.versatia`, organised by
-  feature: the root package (enhancement mechanism, `VersatiaPlugin`, `VersatiaEngine`),
+  feature: the root package (enhancement mechanism, `VersatiaPlugin`, `VersatiaEngine` and its
+  static shortcuts),
   `engine.descriptor` (model of the generated descriptor), `di` (bean scopes), `lifecycle`
-  (`@AutoInvoke`), `resources` (`@ExtractResources`), `event` (`@RegisterListeners`), `util.*` (helpers, see [docs/api.md](docs/api.md))
+  (`@AutoInvoke`), `config` (`@Value`), `resources` (`@ExtractResources`), `event`
+  (`@RegisterListeners`), `util.*` (helpers, see [docs/api.md](docs/api.md))
 - `api/src/test/kotlin/` – unit tests of the helpers
-- `ksp/src/main/kotlin/` – the KSP processor and the descriptor generator, with `ksp.di` and
-  `ksp.lifecycle` for the feature-specific collectors and checks
+- `ksp/src/main/kotlin/` – the KSP processor, with `ksp.di`, `ksp.lifecycle` and `ksp.config` for
+  the feature-specific collectors and checks and `ksp.model` for the descriptor model and generator
 - `ksp/src/test/kotlin/` – unit tests plus compile-testing of the processor
 - `docs/architecture.md` – how VersatiaAPI and VersatiaCore cooperate
 - `docs/enhancements.md` – descriptor format, KSP setup, dependency injection rules

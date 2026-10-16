@@ -8,7 +8,7 @@ inline fun <reified T : Enum<T>> asEnumIgnoreCase(name: String) =
 inline fun <reified T : Enum<T>> asEnumIgnoreCaseOrThrow(name: String) =
     asEnumIgnoreCase<T>(name) ?: throw IllegalArgumentException(
         "No enum constant of ${T::class.qualifiedName} matches \"$name\" (ignoring case); " +
-            "allowed: ${enumEntries<T>().joinToString { it.name }}",
+            "allowed: ${enumEntries<T>().joinToString(limit = 20) { it.name }}",
     )
 
 inline fun <reified T : Enum<T>> isEnumIgnoreCase(name: String) = asEnumIgnoreCase<T>(name) != null
